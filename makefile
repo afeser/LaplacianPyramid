@@ -8,7 +8,7 @@ createDirs:
 	mkdir -p $(BIN_DIR)
 
 laplacianpyramid: createDirs
-	$(CC) -g -o $(BIN_DIR)/LaplacianPyramidV2.bin -I$(INCLUDE_PATH) $(SRC_DIR)/LaplacianPyramidV2.cu -lcudart -lcuda -lppm -L$(LIBRARY_PATH) -L/usr/local/cuda-9.2/lib64/ #kutuphaneyi de nvcc ile yaptigimda -lcudart ve -lcuda olmadiginda da hata verdi
+	$(CC) -g -o $(BIN_DIR)/LaplacianPyramidV2.bin -I$(INCLUDE_PATH) $(SRC_DIR)/LaplacianPyramidV2.cu -lcudart -lcuda -lppm -L$(LIBRARY_PATH) #-L/usr/local/cuda-9.2/lib64/ #kutuphaneyi de nvcc ile yaptigimda -lcudart ve -lcuda olmadiginda da hata verdi
 gaussianpyramid:
 	$(CC) -g -o $(BIN_DIR)/GaussianPyramid.bin -I$(INCLUDE_PATH) $(SRC_DIR)/GaussianPyramid.cu -lppm -L$(LIBRARY_PATH)
 gaussianfilter5x5:

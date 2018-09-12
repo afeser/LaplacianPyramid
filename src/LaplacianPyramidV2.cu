@@ -192,9 +192,9 @@ Picture blend(Picture pic1, Picture pic2){
   cudaMemcpy(composite.G, pic1.G, size/2, cudaMemcpyDeviceToDevice);
   cudaMemcpy(composite.B, pic1.B, size/2, cudaMemcpyDeviceToDevice);
 
-  cudaMemcpy(composite.R, pic2.R, size/2, cudaMemcpyDeviceToDevice);
-  cudaMemcpy(composite.G, pic2.G, size/2, cudaMemcpyDeviceToDevice);
-  cudaMemcpy(composite.B, pic2.B, size/2, cudaMemcpyDeviceToDevice);
+  cudaMemcpy(composite.R+pic1.width*pic2.width/2, pic2.R+pic1.width*pic2.width/2, size/2, cudaMemcpyDeviceToDevice);
+  cudaMemcpy(composite.G+pic1.width*pic2.width/2, pic2.G+pic1.width*pic2.width/2, size/2, cudaMemcpyDeviceToDevice);
+  cudaMemcpy(composite.B+pic1.width*pic2.width/2, pic2.B+pic1.width*pic2.width/2, size/2, cudaMemcpyDeviceToDevice);
 
   // for(i=0; i<composite.height*composite.width/2-blendLength*pic1.width/2+1; i++){
   //   composite.R[i] = pic1.R[i];
@@ -226,12 +226,12 @@ Picture blend(Picture pic1, Picture pic2){
     cudaMemcpy(newLaplacian.G, l1->G, size/2, cudaMemcpyDeviceToDevice);
     cudaMemcpy(newLaplacian.B, l1->B, size/2, cudaMemcpyDeviceToDevice);
 
-    cudaMemcpy(newLaplacian.R, l2->R, size/2, cudaMemcpyDeviceToDevice);
-    cudaMemcpy(newLaplacian.G, l2->G, size/2, cudaMemcpyDeviceToDevice);
-    cudaMemcpy(newLaplacian.B, l2->B, size/2, cudaMemcpyDeviceToDevice);
+    cudaMemcpy(newLaplacian.R+l1->width*l1->height/2, l2->R+l1->width*l1->height/2, size/2, cudaMemcpyDeviceToDevice);
+    cudaMemcpy(newLaplacian.G+l1->width*l1->height/2, l2->G+l1->width*l1->height/2, size/2, cudaMemcpyDeviceToDevice);
+    cudaMemcpy(newLaplacian.B+l1->width*l1->height/2, l2->B+l1->width*l1->height/2, size/2, cudaMemcpyDeviceToDevice);
 
     // Add laplacian to the current picture
-    composite.addLaplacian(newLaplacian);
+    composite.addLaplacian(*l1);
 
     // for(i=0; i<height*width/2-blendLength*width/2+1; i++){
     //   newLaplacian.R[i] = l1->R[i];
@@ -338,21 +338,21 @@ Picture asagi(Picture inPic){
 
     setLaplacian<<<dimGrid2, dimBlock2>>>(GupSampled, laplacianPic->R, outPic.width, outPic.height);
 
-    cudaMemcpy(outPic.R, GupSampled, size, cudaMemcpyDeviceToDevice);
+    cudaMemcpy(outPic.R, GupSampled, size*4, cudaMemcpyDeviceToDevice);
   }
   {
     upSample2<<<dimGrid, dimBlock>>>(inPic.G, GupSampled, inPic.width, inPic.height);
 
     setLaplacian<<<dimGrid2, dimBlock2>>>(GupSampled, laplacianPic->G, outPic.width, outPic.height);
 
-    cudaMemcpy(outPic.G, GupSampled, size, cudaMemcpyDeviceToDevice);
+    cudaMemcpy(outPic.G, GupSampled, size/4, cudaMemcpyDeviceToDevice);
   }
   {
     upSample2<<<dimGrid, dimBlock>>>(inPic.B, GupSampled, inPic.width, inPic.height);
 
     setLaplacian<<<dimGrid2, dimBlock2>>>(GupSampled, laplacianPic->B, outPic.width, outPic.height);
 
-    cudaMemcpy(outPic.B, GupSampled, size, cudaMemcpyDeviceToDevice);
+    cudaMemcpy(outPic.B, GupSampled, size/4, cudaMemcpyDeviceToDevice);
   }
 
   cudaFree(GupSampled);
@@ -361,28 +361,28 @@ Picture asagi(Picture inPic){
 
 }
 void blendElmaPortakal(){
-  // Picture elma, portakal;
-  // char inFileElma[]     = "data/appleorange/apple.ppm";
-  // char inFilePortakal[] = "data/appleorange/orange.ppm";
-  // char outFile[]        = "output/elmaPortakalBirlesim.ppm";
-  // elma                  = Picture(inFileElma, true);
-  // portakal              = Picture(inFilePortakal, true);
+  Picture elma, portakal;
+  char inFileElma[]     = "data/appleorange/apple.ppm";
+  char inFilePortakal[] = "data/appleorange/orange.ppm";
+  char outFile[]        = "output/elmaPortakalBirlesim.ppm";
+  elma                  = Picture(inFileElma, true);
+  portakal              = Picture(inFilePortakal, true);
 
-  // Picture elma1 = yukari(elma);
-  // Picture elma2 = yukari(elma1);
-  // Picture elma3 = yukari(elma2);
+  Picture elma1 = yukari(elma);
+  Picture elma2 = yukari(elma1);
+  Picture elma3 = yukari(elma2);
 
-  // Picture portakal1 = yukari(portakal);
-  // Picture portakal2 = yukari(portakal1);
-  // Picture portakal3 = yukari(portakal2);
+  Picture portakal1 = yukari(portakal);
+  Picture portakal2 = yukari(portakal1);
+  Picture portakal3 = yukari(portakal2);
 
-  // Picture picBlended = blend(elma1, portakal1);
+  Picture picBlended = blend(elma1, portakal1);
 
-  // Picture picBlended1 = asagi(picBlended);
-  // Picture picBlended3 = asagi(picBlended2);
+  Picture picBlended1 = asagi(picBlended);
   // Picture picBlended2 = asagi(picBlended1);
+  // Picture picBlended3 = asagi(picBlended2);
 
-  // portakal1.write(outFile);
+  picBlended1.write(outFile);
 }
 void kucultBuyut(){
   Picture pic;
