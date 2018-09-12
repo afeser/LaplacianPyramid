@@ -166,7 +166,7 @@ __global__ void setLaplacian(pixelByte *image, pixelByte *laplacian, int width, 
   /*
    * Set laplacian to recover the deleted data for Gaussian filter, not reduced size.
    */
-   // return;
+   //return;
    int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
 
    int i;
@@ -196,66 +196,7 @@ Picture blend(Picture pic1, Picture pic2){
   cudaMemcpy(composite.G+pic1.width*pic2.width/2, pic2.G+pic1.width*pic2.width/2, size/2, cudaMemcpyDeviceToDevice);
   cudaMemcpy(composite.B+pic1.width*pic2.width/2, pic2.B+pic1.width*pic2.width/2, size/2, cudaMemcpyDeviceToDevice);
 
-  // for(i=0; i<composite.height*composite.width/2-blendLength*pic1.width/2+1; i++){
-  //   composite.R[i] = pic1.R[i];
-  //   composite.G[i] = pic1.G[i];
-  //   composite.B[i] = pic1.B[i];
-  // }
-  // for(; i<composite.height*composite.width/2+blendLength*pic1.width/2; i++){
-  //   float transparencyConstant = (float)(i/pic1.width - (composite.height*composite.width/2-blendLength*pic1.width/2)/pic1.width) / (blendLength);
-  //
-  //   composite.R[i] = pic1.R[i]*(1.0-transparencyConstant) + pic2.R[i]*transparencyConstant;
-  //   composite.G[i] = pic1.G[i]*(1.0-transparencyConstant) + pic2.G[i]*transparencyConstant;
-  //   composite.B[i] = pic1.B[i]*(1.0-transparencyConstant) + pic2.B[i]*transparencyConstant;
-  // }
-  // for(; i<composite.height*composite.width; i++){
-  //   composite.R[i] = pic2.R[i];
-  //   composite.G[i] = pic2.G[i];
-  //   composite.B[i] = pic2.B[i];
-  // }
-
-  // 2) Blend the laplacians...
-  Picture *l1, *l2;
-  l1 = pic1.getLaplacian();
-  l2 = pic2.getLaplacian();
-  while(l1 != NULL){
-    Picture newLaplacian = Picture(l1->width, l1->height, true);
-    size = l1->width * l1->height * sizeof(pixelByte);
-
-    cudaMemcpy(newLaplacian.R, l1->R, size/2, cudaMemcpyDeviceToDevice);
-    cudaMemcpy(newLaplacian.G, l1->G, size/2, cudaMemcpyDeviceToDevice);
-    cudaMemcpy(newLaplacian.B, l1->B, size/2, cudaMemcpyDeviceToDevice);
-
-    cudaMemcpy(newLaplacian.R+l1->width*l1->height/2, l2->R+l1->width*l1->height/2, size/2, cudaMemcpyDeviceToDevice);
-    cudaMemcpy(newLaplacian.G+l1->width*l1->height/2, l2->G+l1->width*l1->height/2, size/2, cudaMemcpyDeviceToDevice);
-    cudaMemcpy(newLaplacian.B+l1->width*l1->height/2, l2->B+l1->width*l1->height/2, size/2, cudaMemcpyDeviceToDevice);
-
-    // Add laplacian to the current picture
-    composite.addLaplacian(*l1);
-
-    // for(i=0; i<height*width/2-blendLength*width/2+1; i++){
-    //   newLaplacian.R[i] = l1->R[i];
-    //   newLaplacian.G[i] = l1->G[i];
-    //   newLaplacian.B[i] = l1->B[i];
-    // }
-    // for(; i<height*width/2+blendLength*width/2; i++){
-    //   float transparencyConstant = (float)(i/width - (height*width/2-blendLength*width/2)/width) / (blendLength);
-    //
-    //   newLaplacian.R[i] = l1->R[i]*(1.0-transparencyConstant) + l2->R[i]*transparencyConstant;
-    //   newLaplacian.G[i] = l1->G[i]*(1.0-transparencyConstant) + l2->G[i]*transparencyConstant;
-    //   newLaplacian.B[i] = l1->B[i]*(1.0-transparencyConstant) + l2->B[i]*transparencyConstant;
-    // }
-    // for(; i<height*width; i++){
-    //   newLaplacian.R[i] = l2->R[i];
-    //   newLaplacian.G[i] = l2->G[i];
-    //   newLaplacian.B[i] = l2->B[i];
-    // }
-
-    l1 = pic1.getLaplacian();
-    l2 = pic2.getLaplacian();
-
-  }
-  return composite;
+    return composite;
 }
 Picture yukari(Picture inPic){
   /*
@@ -331,7 +272,6 @@ Picture asagi(Picture inPic){
   dim3 dimGrid2 (inPic.width*2/BLOCK_SIZE, inPic.height*2/BLOCK_SIZE);
 
   Picture *laplacianPic = inPic.getLaplacian();
-  outPic.laplacianPicture = inPic.laplacianPicture;
 
   {
     upSample2<<<dimGrid, dimBlock>>>(inPic.R, GupSampled, inPic.width, inPic.height);
@@ -345,14 +285,14 @@ Picture asagi(Picture inPic){
 
     setLaplacian<<<dimGrid2, dimBlock2>>>(GupSampled, laplacianPic->G, outPic.width, outPic.height);
 
-    cudaMemcpy(outPic.G, GupSampled, size/4, cudaMemcpyDeviceToDevice);
+    cudaMemcpy(outPic.G, GupSampled, size*4, cudaMemcpyDeviceToDevice);
   }
   {
     upSample2<<<dimGrid, dimBlock>>>(inPic.B, GupSampled, inPic.width, inPic.height);
 
     setLaplacian<<<dimGrid2, dimBlock2>>>(GupSampled, laplacianPic->B, outPic.width, outPic.height);
 
-    cudaMemcpy(outPic.B, GupSampled, size/4, cudaMemcpyDeviceToDevice);
+    cudaMemcpy(outPic.B, GupSampled, size*4, cudaMemcpyDeviceToDevice);
   }
 
   cudaFree(GupSampled);
@@ -376,13 +316,23 @@ void blendElmaPortakal(){
   Picture portakal2 = yukari(portakal1);
   Picture portakal3 = yukari(portakal2);
 
-  Picture picBlended = blend(elma1, portakal1);
+  Picture picBlended = blend(elma3, portakal3);
 
+  Picture picBlendedLaplacian = blend(*elma3.getLaplacian(), *portakal3.getLaplacian());
+  picBlended.addLaplacian(picBlendedLaplacian);
   Picture picBlended1 = asagi(picBlended);
-  // Picture picBlended2 = asagi(picBlended1);
-  // Picture picBlended3 = asagi(picBlended2);
 
-  picBlended1.write(outFile);
+  Picture picBlended1Laplacian = blend(*elma2.getLaplacian(), *portakal2.getLaplacian());
+  picBlended1.addLaplacian(picBlended1Laplacian);
+  Picture picBlended2 = asagi(picBlended1);
+
+  Picture picBlended2Laplacian = blend(*elma1.getLaplacian(), *portakal1.getLaplacian());
+  picBlended2.addLaplacian(picBlended2Laplacian);
+  Picture picBlended3 = asagi(picBlended2);
+
+
+  picBlended3.write(outFile);
+
 }
 void kucultBuyut(){
   Picture pic;
