@@ -309,38 +309,31 @@ Picture asagi(Picture inPic){
   return outPic;
 
 }
-void blendElmaPortakal(){
-  Picture elma, portakal;
-  char inFileElma[]     = "data/appleorange/apple.ppm";
-  char inFilePortakal[] = "data/appleorange/orange.ppm";
-  char outFile[]        = "output/elmaPortakalBirlesim.ppm";
-  elma                  = Picture(inFileElma, true);
-  portakal              = Picture(inFilePortakal, true);
-
-  Picture elma1 = yukari(elma);
-  Picture elma2 = yukari(elma1);
-  Picture elma3 = yukari(elma2);
-
-  Picture portakal1 = yukari(portakal);
-  Picture portakal2 = yukari(portakal1);
-  Picture portakal3 = yukari(portakal2);
-
-  Picture picBlended = blend(elma3, portakal3);
-
-  Picture picBlendedLaplacian = blend(*elma3.getLaplacian(), *portakal3.getLaplacian());
-  picBlended.addLaplacian(picBlendedLaplacian);
-  Picture picBlended1 = asagi(picBlended);
-
-  Picture picBlended1Laplacian = blend(*elma2.getLaplacian(), *portakal2.getLaplacian());
-  picBlended1.addLaplacian(picBlended1Laplacian);
-  Picture picBlended2 = asagi(picBlended1);
-
-  Picture picBlended2Laplacian = blend(*elma1.getLaplacian(), *portakal1.getLaplacian());
-  picBlended2.addLaplacian(picBlended2Laplacian);
-  Picture picBlended3 = asagi(picBlended2);
+void blendElmaPortakal(char *pic1, char *pic2, char *picOut, const unsigned pyramidHeight){
+  /*
+  * Blend given 2 images with given depth and parameters specified as
+  * #define statement.
+  */
+  Picture elma[pyramidHeight];
+  Picture portakal[pyramidHeight];
+  elma[0]               = Picture(pic1, true);
+  portakal[0]           = Picture(pic2, true);
 
 
-  picBlended3.write(outFile);
+  for(int i = 1; i<pyramidHeight; i++){
+    elma[i]     = yukari(elma[i-1]);
+    portakal[i] = yukari(portakal[i-1]);
+  }
+
+  Picture picBlended = blend(elma[pyramidHeight-1], portakal[pyramidHeight-1]);
+
+  for(int i = pyramidHeight-1; 0<i; i--){
+    Picture picBlendedLaplacian = blend(*elma[i].getLaplacian(), *portakal[i].getLaplacian());
+    picBlended.addLaplacian(picBlendedLaplacian);
+    picBlended = asagi(picBlended);
+  }
+
+  picBlended.write(picOut);
 
 }
 void kucultBuyut(){
@@ -361,5 +354,9 @@ void kucultBuyut(){
 }
 
 int main(void){
-  blendElmaPortakal();
+  // char inFileElma[]     = "data/appleorange/apple.ppm";
+  // char inFilePortakal[] = "data/appleorange/orange.ppm";
+  // char outFile[]        = "output/elmaPortakalBirlesim.ppm";
+  // blendElmaPortakal(inFileElma, inFilePortakal, outFile, 2);
+
 }
