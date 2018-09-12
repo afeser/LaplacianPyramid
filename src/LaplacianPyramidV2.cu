@@ -10,7 +10,7 @@
 
 
 
-__global__ void conv2       (pixelByte *in, pixelByte *out, int width, int height, int kernelSize, float kernel[]){
+__global__ void conv2       (pixelByte *in      , pixelByte *out, int width, int height, int kernelSize, float kernel[]){
   /*
    * Birakirken Octave ile kontrol ettim calisiyordu.
    */
@@ -53,7 +53,7 @@ __global__ void conv2       (pixelByte *in, pixelByte *out, int width, int heigh
   out[x] = (unsigned) cikti;
 
 }
-__global__ void reduce      (pixelByte *in, pixelByte *out, int width, int height){
+__global__ void reduce      (pixelByte *in      , pixelByte *out, int width, int height){
   /*
    * Convolve with Gaussian kernel.
    * Normalde convoluyion resim boyutunu buyutuyor ama biz burada buyutmuyormus gibi yapalim, kenarlari atalim, kolaylik olmasi acisindan.
@@ -89,7 +89,7 @@ __global__ void reduce      (pixelByte *in, pixelByte *out, int width, int heigh
   out[x] = (unsigned) cikti;
 
 }
-__global__ void downSample2 (pixelByte *in, pixelByte *out, int width, int height){
+__global__ void downSample2 (pixelByte *in      , pixelByte *out, int width, int height){
   int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
 
   if(x/width%2 == 1 || x%2 == 1){
@@ -98,7 +98,7 @@ __global__ void downSample2 (pixelByte *in, pixelByte *out, int width, int heigh
 
   out[(x/width/2)*width/2 + (x%width)/2] = in[x];
 }
-__global__ void upSample2   (pixelByte *in, pixelByte *out, int width, int height){
+__global__ void upSample2   (pixelByte *in      , pixelByte *out, int width, int height){
   int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
 
   if(x > width*height-1){
@@ -110,7 +110,7 @@ __global__ void upSample2   (pixelByte *in, pixelByte *out, int width, int heigh
   out[(x%width)*2 + x/width*(width*4)+width*2]   = in[x]; // 1 alti 1 sagi
   out[(x%width)*2 + x/width*(width*4)+1+width*2] = in[x]; // 1 sagi 1 alti
 }
-__global__ void downSample  (pixelByte *in, pixelByte *out, int width, int height){
+__global__ void downSample  (pixelByte *in      , pixelByte *out, int width, int height){
   /*
    * Denedim bu da calisiyordu.
    * Cift olan satirlari siliyoruz.
@@ -122,7 +122,7 @@ __global__ void downSample  (pixelByte *in, pixelByte *out, int width, int heigh
      out[x/width/2*width+x%width] = in[x];
    }
 }
-__global__ void upSample    (pixelByte *in, pixelByte *out, int width, int height){
+__global__ void upSample    (pixelByte *in      , pixelByte *out, int width, int height){
   /*
    * Bunu da denedim calisiyor.
    * Satiri kopyaliyoruz, tek satirlari da 0 ile dolduruyoruz.(ilk satiri kopyala 1, satiri doldur)
@@ -162,41 +162,50 @@ __global__ void getLaplacian(pixelByte *modified, pixelByte *original, pixelByte
     out[x] = i;
   }
 }
-__global__ void setLaplacian(pixelByte *image, pixelByte *laplacian, int width, int height){
+__global__ void setLaplacian(pixelByte *image   , pixelByte *laplacian, int width, int height){
   /*
    * Set laplacian to recover the deleted data for Gaussian filter, not reduced size.
    */
    //return;
-   int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
+  int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
 
-   int i;
-   i = image[x] + laplacian[x] - 128;
-   if(i < 0){
-     image[x] = 0;
-   }else if(i > 255){
-     image[x] = 255;
-   }else{
-     image[x] = i;
-   }
+  int i;
+  i = image[x] + laplacian[x] - 128;
+  if(i < 0){
+   image[x] = 0;
+  }else if(i > 255){
+   image[x] = 255;
+  }else{
+   image[x] = i;
+  }
+}
+__global__ void _blend      (pixelByte *ch1     , pixelByte *ch2, pixelByte *composite, unsigned width, unsigned height)
+{
+  int i = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
+
+  if(i < height*width/2-blendLength*width/2+1){
+    composite[i] = ch1[i];
+  }else if(i > height*width/2+blendLength*width/2){
+    composite[i] = ch2[i];
+  }else{
+    float transparencyConstant = (float)(i/width - (height*width/2-blendLength*width/2)/width) / (blendLength);
+
+    composite[i] = ch1[i]*(1.0-transparencyConstant) + ch2[i]*transparencyConstant;
+  }
 }
 
 Picture blend(Picture pic1, Picture pic2){
   // 1) Blend the images...
   Picture composite = Picture(pic1.width, pic1.height, true);
 
-  unsigned size = pic1.width * pic2.width * sizeof(pixelByte);
+  dim3 dimBlock2(BLOCK_SIZE, BLOCK_SIZE);
+  dim3 dimGrid2 (pic1.width/BLOCK_SIZE, pic1.height/BLOCK_SIZE);
 
-  // int i = 0;
-  // Both of them are on GPU
-  cudaMemcpy(composite.R, pic1.R, size/2, cudaMemcpyDeviceToDevice);
-  cudaMemcpy(composite.G, pic1.G, size/2, cudaMemcpyDeviceToDevice);
-  cudaMemcpy(composite.B, pic1.B, size/2, cudaMemcpyDeviceToDevice);
+  _blend<<<dimGrid2, dimBlock2>>>(pic1.R, pic2.R, composite.R, pic1.width, pic1.height);
+  _blend<<<dimGrid2, dimBlock2>>>(pic1.G, pic2.G, composite.G, pic1.width, pic1.height);
+  _blend<<<dimGrid2, dimBlock2>>>(pic1.B, pic2.B, composite.B, pic1.width, pic1.height);
 
-  cudaMemcpy(composite.R+pic1.width*pic2.width/2, pic2.R+pic1.width*pic2.width/2, size/2, cudaMemcpyDeviceToDevice);
-  cudaMemcpy(composite.G+pic1.width*pic2.width/2, pic2.G+pic1.width*pic2.width/2, size/2, cudaMemcpyDeviceToDevice);
-  cudaMemcpy(composite.B+pic1.width*pic2.width/2, pic2.B+pic1.width*pic2.width/2, size/2, cudaMemcpyDeviceToDevice);
-
-    return composite;
+  return composite;
 }
 Picture yukari(Picture inPic){
   /*
