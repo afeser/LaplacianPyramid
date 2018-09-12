@@ -1,8 +1,8 @@
 CC           = nvcc
 BIN_DIR      = "bin"
 SRC_DIR      = "src"
-LIBRARY_PATH = "/home/afeser/Dropbox/Documents/Canavarr/Pratik/library/lib"
-INCLUDE_PATH = "/home/afeser/Dropbox/Documents/Canavarr/Pratik/library/include"
+LIBRARY_PATH = "/home/afeser/Dropbox/Documents/Canavarr/Pratik/MyLibrary/lib"
+INCLUDE_PATH = "/home/afeser/Dropbox/Documents/Canavarr/Pratik/MyLibrary/include"
 
 createDirs:
 	mkdir -p $(BIN_DIR)
