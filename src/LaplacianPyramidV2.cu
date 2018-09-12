@@ -194,6 +194,39 @@ __global__ void _blend      (pixelByte *ch1     , pixelByte *ch2, pixelByte *com
   }
 }
 
+void reduceCPU(pixelByte *in, pixelByte *out, int width, int height){
+  const int kernelSize = 5;
+  float kernel[kernelSize*kernelSize] = {   6.9625e-08,   2.8089e-05,   2.0755e-04,   2.8089e-05,   6.9625e-08,
+                                            2.8089e-05,   1.1332e-02,   8.3731e-02,   1.1332e-02,   2.8089e-05,
+                                            2.0755e-04,   8.3731e-02,   6.1869e-01,   8.3731e-02,   2.0755e-04,
+                                            2.8089e-05,   1.1332e-02,   8.3731e-02,   1.1332e-02,   2.8089e-05,
+                                            6.9625e-08,   2.8089e-05,   2.0755e-04,   2.8089e-05,   6.9625e-08};
+
+  for(int x = 0; x < width*height; x++){
+    float cikti;
+    cikti = 0.0f ;
+    for(int i1 = 0; i1<kernelSize; i1++){ // row'u gosteriyor
+      for(int i2 = 0; i2<kernelSize; i2++){ // column'u gosteriyor
+        int row    = i1 - kernelSize/2;
+        int column = i2 - kernelSize/2;
+
+        int gercek = x + row*width; // o anki kutucuk
+        if(gercek/width != (gercek+column)/width) // column sebebiyle row degistiriyorsa
+          continue;
+        gercek += column;
+
+        if(gercek < 0 || gercek > width*height-1){
+          continue;
+        }
+
+        cikti += in[gercek]*kernel[kernelSize*kernelSize-1-(i2*kernelSize+i1)]; // tersten olmasi icin
+      }
+    }
+
+    out[x] = (unsigned) cikti;
+  }
+}
+
 Picture blend(Picture pic1, Picture pic2){
   // 1) Blend the images...
   Picture composite = Picture(pic1.width, pic1.height, true);
@@ -336,27 +369,44 @@ void blendElmaPortakal(char *pic1, char *pic2, char *picOut, const unsigned pyra
   picBlended.write(picOut);
 
 }
-void kucultBuyut(){
-  Picture pic;
-  char inFile[]  = "data/1600.ppm";
-  char outFile[] = "output/laplacianDeneme1.ppm";
-  pic = Picture(inFile, true);
+void gaussianBenchmark(int block_size){
+  char inFile[]  = "data/adrian/current.ppm";
+  char outFile[] = "output/adrianCurrent.ppm";
+  Picture pic1 = Picture(inFile, true);
+  printf("%d, ", pic1.width);
+  Picture pic2 = Picture(pic1.width, pic1.height, true);
 
-  Picture pic1 = yukari(pic);
-  Picture pic2 = yukari(pic1);
+  dim3 dimBlock2(block_size, block_size);
+  dim3 dimGrid2 (pic1.width/block_size, pic1.height/block_size);
 
-  Picture pic3 = asagi(pic2);
-  pic3.laplacianPicture = pic1.laplacianPicture;
-  Picture pic4 = asagi(pic3);
+  reduce<<<dimGrid2, dimBlock2>>>(pic1.R, pic2.R, pic1.width, pic1.height);
+  reduce<<<dimGrid2, dimBlock2>>>(pic1.G, pic2.G, pic1.width, pic1.height);
+  reduce<<<dimGrid2, dimBlock2>>>(pic1.B, pic2.B, pic1.width, pic1.height);
 
-  pic4.write(outFile);
+  pic2.write(outFile);
 
 }
+void gaussianBenchmarkCPU(){
+  char inFile[]  = "data/adrian/current.ppm";
+  char outFile[] = "output/adrianCurrent.ppm";
+  Picture pic1 = Picture(inFile, false);
+  printf("%d, ", pic1.width);
+  Picture pic2 = Picture(pic1.width, pic1.height, false);
 
-int main(void){
+  dim3 dimBlock2(BLOCK_SIZE, BLOCK_SIZE);
+  dim3 dimGrid2 (pic1.width/BLOCK_SIZE, pic1.height/BLOCK_SIZE);
+
+  reduceCPU(pic1.R, pic2.R, pic1.width, pic1.height);
+  reduceCPU(pic1.R, pic2.R, pic1.width, pic1.height);
+  reduceCPU(pic1.R, pic2.R, pic1.width, pic1.height);
+
+  pic2.write(outFile);
+
+}
+int main(int argc, char *argv[]){
   // char inFileElma[]     = "data/appleorange/apple.ppm";
   // char inFilePortakal[] = "data/appleorange/orange.ppm";
   // char outFile[]        = "output/elmaPortakalBirlesim.ppm";
   // blendElmaPortakal(inFileElma, inFilePortakal, outFile, 2);
-
+  gaussianBenchmark(atoi(argv[1]));
 }
