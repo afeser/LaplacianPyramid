@@ -338,6 +338,69 @@ Picture asagi(Picture inPic){
 
 }
 
+void sharpenEdges(char *nameIn, char *nameOut, const int sharpDepth){
+  Picture inPic           = Picture(nameIn, true);
+  Picture newLaplacianPic = Picture(inPic.width, inPic.height, true);
+
+  dim3 dimBlock2(BLOCK_SIZE, BLOCK_SIZE);
+  dim3 dimGrid2 (inPic.width/BLOCK_SIZE, inPic.height/BLOCK_SIZE);
+
+  unsigned size = inPic.width*inPic.height*sizeof(pixelByte);
+
+  pixelByte *GdownSampled;
+  pixelByte *Ggaussed;
+  pixelByte *GrawData;
+  pixelByte *GupSampled;
+
+  cudaMalloc((void**)&GdownSampled, size/4);
+  cudaMalloc((void**)&Ggaussed, size);
+  cudaMalloc((void**)&GrawData, size);
+  cudaMalloc((void**)&GupSampled, size);
+
+
+
+  {
+    cudaMemcpy(GrawData, inPic.R, size, cudaMemcpyDeviceToDevice);
+    reduce<<<dimGrid2, dimBlock2>>>     (inPic.R, Ggaussed, inPic.width, inPic.height);
+    downSample2<<<dimGrid2, dimBlock2>>>(Ggaussed, GdownSampled, inPic.width, inPic.height);
+
+    upSample2<<<dimGrid2, dimBlock2>>>  (GdownSampled, GupSampled, inPic.width/2, inPic.height/2);
+
+    getLaplacian<<<dimGrid2, dimBlock2>>>(GrawData, GupSampled, newLaplacianPic.R, inPic.width, inPic.height);
+  }
+  {
+
+    cudaMemcpy(GrawData, inPic.G, size, cudaMemcpyDeviceToDevice);
+    reduce<<<dimGrid2, dimBlock2>>>     (inPic.G, Ggaussed, inPic.width, inPic.height);
+    downSample2<<<dimGrid2, dimBlock2>>>(Ggaussed, GdownSampled, inPic.width, inPic.height);
+
+    upSample2<<<dimGrid2, dimBlock2>>>  (GdownSampled, GupSampled, inPic.width/2, inPic.height/2);
+
+    getLaplacian<<<dimGrid2, dimBlock2>>>(GrawData, GupSampled, newLaplacianPic.G, inPic.width, inPic.height);  }
+  {
+
+    cudaMemcpy(GrawData, inPic.B, size, cudaMemcpyDeviceToDevice);
+    reduce<<<dimGrid2, dimBlock2>>>     (inPic.B, Ggaussed, inPic.width, inPic.height);
+    downSample2<<<dimGrid2, dimBlock2>>>(Ggaussed, GdownSampled, inPic.width, inPic.height);
+
+    upSample2<<<dimGrid2, dimBlock2>>>  (GdownSampled, GupSampled, inPic.width/2, inPic.height/2);
+
+    getLaplacian<<<dimGrid2, dimBlock2>>>(GrawData, GupSampled, newLaplacianPic.B, inPic.width, inPic.height);
+  }
+
+  cudaFree(Ggaussed);
+  cudaFree(GdownSampled);
+
+  for(int i = 0; i<sharpDepth; i++){
+    setLaplacian<<<dimGrid2, dimBlock2>>>(inPic.R, newLaplacianPic.R, inPic.width, inPic.height);
+    setLaplacian<<<dimGrid2, dimBlock2>>>(inPic.G, newLaplacianPic.G, inPic.width, inPic.height);
+    setLaplacian<<<dimGrid2, dimBlock2>>>(inPic.B, newLaplacianPic.B, inPic.width, inPic.height);    
+  }
+
+  inPic.write(nameOut);
+
+
+}
 void blendElmaPortakal(char *pic1, char *pic2, char *picOut, const unsigned pyramidHeight){
   /*
   * Blend given 2 images with given depth and parameters specified as
