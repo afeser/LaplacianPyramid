@@ -1,9 +1,4 @@
-/*
- * SORUNU ANLADIIIIIM!
- * 32x32 blok boyutu cok fazla oldugu icin resim cok kuculuyor ve her tarafi siyah oluyor!!!!
- * Buyuk resimlerle denedigim zaman hafif oldu gibi aslinda
- */
- #include "ppm.hpp"
+#include "ppm.hpp"
 
 #define BLOCK_SIZE 1 // kare olan blogun bir kenari
 #define blendLength 20 // kac pikselde transparency evaluate edilecek(en ust kademede)
@@ -342,6 +337,7 @@ Picture asagi(Picture inPic){
   return outPic;
 
 }
+
 void blendElmaPortakal(char *pic1, char *pic2, char *picOut, const unsigned pyramidHeight){
   /*
   * Blend given 2 images with given depth and parameters specified as
