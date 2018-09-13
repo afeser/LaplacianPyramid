@@ -399,10 +399,3 @@ void gaussianBenchmarkCPU(){
   pic2.write(outFile);
 
 }
-int main(int argc, char *argv[]){
-  // char inFileElma[]     = "data/appleorange/apple.ppm";
-  // char inFilePortakal[] = "data/appleorange/orange.ppm";
-  // char outFile[]        = "output/elmaPortakalBirlesim.ppm";
-  // blendElmaPortakal(inFileElma, inFilePortakal, outFile, 2);
-  gaussianBenchmark(atoi(argv[1]));
-}
