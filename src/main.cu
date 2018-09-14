@@ -1,6 +1,8 @@
+#define BLOCK_SIZE 1 // kare olan blogun bir kenari
+
 #include "LaplacianPyramid.cu"
+#include "LocalLaplacianPyramid.cu"
 #include <string.h>
-#include "pyramid.hpp"
 
 void help(){
   printf("Use : \n");
@@ -8,8 +10,11 @@ void help(){
   printf("command sharpen input_name output_name number_of_additions\n\n");
 
   printf("command pyramid laplacian height\n");
-  printf("command pyramid gaussian height\n");
+  printf("command pyramid gaussian height\n\n");
+
+  printf("command localLaplacian height number_of_additions\n");
 }
+
 
 int main(int argc, char *argv[]){
   if(argc<2){
@@ -72,6 +77,25 @@ int main(int argc, char *argv[]){
       help();
       return 0;
     }
+  }
+
+  if(!strcmp(argv[1], "localLaplacian")){
+    char inFileElma[]    = "data/Sample.ppm";
+    char outFile[]       = "output/LocalLaplacianSample.ppm";
+
+    const float sigma         = 0.5f;
+    const float alpha         = 2.0f;
+
+    int pyramidHeight       = atoi(argv[2]);
+    int number_of_additions = atoi(argv[3]);
+
+    localLaplacianPyramid(inFileElma,
+                          outFile,
+                          sigma,
+                          alpha,
+                          pyramidHeight,
+                          number_of_additions
+                        );
   }
 
 }

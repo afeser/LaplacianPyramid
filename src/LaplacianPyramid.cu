@@ -1,6 +1,5 @@
 #include "ppm.hpp"
 
-#define BLOCK_SIZE 1 // kare olan blogun bir kenari
 #define blendLength 20 // kac pikselde transparency evaluate edilecek(en ust kademede)
 
 
@@ -394,7 +393,7 @@ void sharpenEdges(char *nameIn, char *nameOut, const int sharpDepth){
   for(int i = 0; i<sharpDepth; i++){
     setLaplacian<<<dimGrid2, dimBlock2>>>(inPic.R, newLaplacianPic.R, inPic.width, inPic.height);
     setLaplacian<<<dimGrid2, dimBlock2>>>(inPic.G, newLaplacianPic.G, inPic.width, inPic.height);
-    setLaplacian<<<dimGrid2, dimBlock2>>>(inPic.B, newLaplacianPic.B, inPic.width, inPic.height);    
+    setLaplacian<<<dimGrid2, dimBlock2>>>(inPic.B, newLaplacianPic.B, inPic.width, inPic.height);
   }
 
   inPic.write(nameOut);
