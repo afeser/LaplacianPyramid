@@ -55,23 +55,23 @@ int main(int argc, char *argv[]){
 
     if(!strcmp(argv[2], "laplacian")){
       Pyramid p;
-      p.createLaplacian(in, height);
+      p.createLaplacian(&in, height);
 
       for(int i = 0; i<height; i++){
         // C tarzi oldu malesef
         sprintf(outFileTemp, "%s%d.ppm", outFile, i);
 
-        p.getLayer(i).write(outFileTemp);
+        p.getLayer(i)->write(outFileTemp);
       }
     }else if(!strcmp(argv[2], "gaussian")){
         Pyramid p;
-        p.createGaussian(in, height);
+        p.createGaussian(&in, height);
 
         for(int i = 0; i<height; i++){
           // C tarzi oldu malesef
           sprintf(outFileTemp, "%s%d.ppm", outFile, i);
 
-          p.getLayer(i).write(outFileTemp);
+          p.getLayer(i)->write(outFileTemp);
         }
     }else{
       help();
