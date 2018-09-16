@@ -1,68 +1,33 @@
 #include "ppm.hpp"
 #include "pyramid.hpp"
 
-__global__ void _r(Picture *I, Picture *O, Pixel G, float sigma, float alpha){
+__global__ void _r(pixelByte *I, pixelByte *O, pixelByte g, float sigma, float alpha, unsigned width, unsigned height){
   // f function is taken polinomial(at least a power function)
-  int x = blockIdx.y*BLOCK_SIZE*I->width + blockIdx.x*BLOCK_SIZE + threadIdx.y*I->width + threadIdx.x; //current pixel
-  pixelByte g;
+  int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
 
-  // Do for R, G and B
-  g = G.R;
-  if(I->R[x] < g){
-    O->R[x] = g - sigma*powf( (g - I->R[x]) / sigma, alpha);
+  if(I[x] < g){
+    O[x] = g - sigma*powf( (g - I[x]) / sigma, alpha);
   }else{
-    O->R[x] = g + sigma*powf( (I->R[x] - g) / sigma, alpha);
+    O[x] = g + sigma*powf( (I[x] - g) / sigma, alpha);
   }
-
-  g = G.G;
-  if(I->G[x] < g){
-    O->G[x] = g - sigma*powf( (g - I->G[x]) / sigma, alpha);
-  }else{
-    O->G[x] = g + sigma*powf( (I->G[x] - g) / sigma, alpha);
-  }
-
-  g = G.B;
-  if(I->B[x] < g){
-    O->B[x] = g - sigma*powf( (g - I->B[x]) / sigma, alpha);
-  }else{
-    O->B[x] = g + sigma*powf( (I->B[x] - g) / sigma, alpha);
-  }
-
 }
-__global__ void _setLaplacian(Picture *inPic, Picture *laplacian){
+__global__ void _setLaplacian(pixelByte *inPic, pixelByte *laplacian, unsigned width, unsigned height){
   /*
    * Set laplacian to recover the deleted data for Gaussian filter, not reduced size.
    */
 
-  int x = blockIdx.y*BLOCK_SIZE*inPic->width + blockIdx.x*BLOCK_SIZE + threadIdx.y*inPic->width + threadIdx.x; //current pixel
+  int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
 
   int i;
-  i = inPic->R[x] + laplacian->R[x] - 128;
+  i = inPic[x] + laplacian[x] - 128;
   if(i < 0){
-   inPic->R[x] = 0;
+   inPic[x] = 0;
   }else if(i > 255){
-   inPic->R[x] = 255;
+   inPic[x] = 255;
   }else{
-   inPic->R[x] = i;
+   inPic[x] = i;
   }
 
-  i = inPic->G[x] + laplacian->G[x] - 128;
-  if(i < 0){
-   inPic->G[x] = 0;
-  }else if(i > 255){
-   inPic->G[x] = 255;
-  }else{
-   inPic->G[x] = i;
-  }
-
-  i = inPic->B[x] + laplacian->B[x] - 128;
-  if(i < 0){
-   inPic->B[x] = 0;
-  }else if(i > 255){
-   inPic->B[x] = 255;
-  }else{
-   inPic->B[x] = i;
-  }
 }
 
 void localLaplacianPyramid(char *inputPath,
@@ -98,7 +63,11 @@ void localLaplacianPyramid(char *inputPath,
         dim3 dimBlock2(BLOCK_SIZE, BLOCK_SIZE);
         dim3 dimGrid2 (width/BLOCK_SIZE, height/BLOCK_SIZE);
         Picture mapped = Picture(width, height, true);
-        _r<<<dimGrid2, dimBlock2>>>(&inPic, &mapped, g, sigma, alpha);
+
+        // Direk Picture pointer'i seklinde yolladigimda calismiyor nedense, siyah resim aliyorum.
+        _r<<<dimGrid2, dimBlock2>>>(gaussianP.getLayer(l)->R, mapped.R, g.R, sigma, alpha, width, height);
+        _r<<<dimGrid2, dimBlock2>>>(gaussianP.getLayer(l)->G, mapped.G, g.G, sigma, alpha, width, height);
+        _r<<<dimGrid2, dimBlock2>>>(gaussianP.getLayer(l)->B, mapped.B, g.B, sigma, alpha, width, height);
 
         // Find new Laplacian Pyramid
         Pyramid nLaplacianP;
@@ -111,13 +80,15 @@ void localLaplacianPyramid(char *inputPath,
     }
   }
 
-  // // Simdilik sadece en alt katmani yaziyorum (ustler nasil collapse edilecek ki???)
-  // dim3 dimBlock2(BLOCK_SIZE, BLOCK_SIZE);
-  // dim3 dimGrid2 (inPic.width/BLOCK_SIZE, inPic.height/BLOCK_SIZE);
-  //
-  // for(int i = 0; i<number_of_additions; i++){
-  //   _setLaplacian<<<dimGrid2, dimBlock2>>>(&inPic, outputP.getLayer(0));
-  // }
+  // Simdilik sadece en alt katmani yaziyorum (ustler nasil collapse edilecek ki???)
+  dim3 dimBlock2(BLOCK_SIZE, BLOCK_SIZE);
+  dim3 dimGrid2 (inPic.width/BLOCK_SIZE, inPic.height/BLOCK_SIZE);
+
+  for(int i = 0; i<number_of_additions; i++){
+    _setLaplacian<<<dimGrid2, dimBlock2>>>(inPic.R, outputP.getLayer(0)->R, inPic.width, inPic.height);
+    _setLaplacian<<<dimGrid2, dimBlock2>>>(inPic.G, outputP.getLayer(0)->G, inPic.width, inPic.height);
+    // _setLaplacian<<<dimGrid2, dimBlock2>>>(inPic.B, outputP.getLayer(0)->B, inPic.width, inPic.height);
+  }
   inPic.write(outputPath);
 
 }
