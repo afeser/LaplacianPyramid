@@ -69,40 +69,39 @@ void localLaplacianPyramid(char *inputPath,
   laplacianP->createLaplacian(&inPic, pyramidHeight);
 
   outputP->createLaplacian(&inPic, pyramidHeight);
+  outputP->getLayer(0)->write("YAZKIZIM1.ppm");
 
   for(int l = 0; l<pyramidHeight; l++){
 
-    unsigned height = inPic.height / std::pow(2, l);
-    unsigned width  = inPic.width  / std::pow(2, l);
+    unsigned width  = laplacianP->getLayer(l)->width;
+    unsigned height = laplacianP->getLayer(l)->height;
 
     for(int y = 0; y<height; y++){
       for(int x = 0; x<width; x++){
-
-        // Get Gaussian average...
+        // Get Gaussian average for each layer
         Pixel g = gaussianP->getLayer(l)->getPixel(x, y);
 
         // Map to a new image
         dim3 dimBlock2(BLOCK_SIZE, BLOCK_SIZE);
-        dim3 dimGrid2 (width/BLOCK_SIZE, height/BLOCK_SIZE);
-        Picture mapped(width, height, true);
+        dim3 dimGrid2 (inPic.width/BLOCK_SIZE, inPic.height/BLOCK_SIZE);
+        Picture mapped(inPic.width, inPic.height, true);
 
-        // Direk Picture pointer'i seklinde yolladigimda calismiyor nedense, siyah resim aliyorum.
-        _r<<<dimGrid2, dimBlock2>>>(gaussianP->getLayer(l)->R, mapped.R, g.R, sigma, alpha, width, height);
-        _r<<<dimGrid2, dimBlock2>>>(gaussianP->getLayer(l)->G, mapped.G, g.G, sigma, alpha, width, height);
-        _r<<<dimGrid2, dimBlock2>>>(gaussianP->getLayer(l)->B, mapped.B, g.B, sigma, alpha, width, height);
+        // Converting the base image to a new mapped image
+        _r<<<dimGrid2, dimBlock2>>>(inPic.R, mapped.R, g.R, sigma, alpha, inPic.width, inPic.height);
+        _r<<<dimGrid2, dimBlock2>>>(inPic.G, mapped.G, g.G, sigma, alpha, inPic.width, inPic.height);
+        _r<<<dimGrid2, dimBlock2>>>(inPic.B, mapped.B, g.B, sigma, alpha, inPic.width, inPic.height);
 
-        // Find new Laplacian Pyramid
+        // Find new Laplacian Pyramid for the mapped image
         Pyramid nLaplacianP;
-        nLaplacianP.createLaplacian(&mapped, 1); // burasi cooook buyuk memory kaplayacak is bittikten sonra silmezsek!!!
+        nLaplacianP.createLaplacian(&mapped, l+1); // burasi cooook buyuk memory kaplayacak is bittikten sonra silmezsek!!!
 
         // Update output pyramid
-        Pixel p = nLaplacianP.getLayer(0)->getPixel(x, y);
-        outputP->getLayer(l)->setPixel(x, y, p);
+        Pixel p = nLaplacianP.getLayer(l)->getPixel(x, y);
+        // outputP->getLayer(l)->setPixel(x, y, p);
       }
     }
   }
 
-  outputP->getLayer(0)->write("YAZKIZIM.ppm");
 
   // Collapse the pyramid
   for(int i = pyramidHeight-1; i > 0; i--){
