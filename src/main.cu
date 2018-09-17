@@ -83,8 +83,8 @@ int main(int argc, char *argv[]){
     char inFileElma[]    = "data/Sample.ppm";
     char outFile[]       = "output/LocalLaplacianSample.ppm";
 
-    const float sigma         = 0.5f;
-    const float alpha         = 2.0f;
+    const float sigma         = 4.0f*255.0f;
+    const float alpha         = 0.25f;
 
     int pyramidHeight       = atoi(argv[2]);
     int number_of_additions = atoi(argv[3]);
