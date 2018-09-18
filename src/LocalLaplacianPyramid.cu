@@ -1,16 +1,32 @@
 #include "ppm.hpp"
 #include "pyramid.hpp"
 
-__global__ void _r           (pixelByte *I, pixelByte *O, pixelByte g, float sigma, float alpha, unsigned width, unsigned height){
+__global__ void _r              (pixelByte *I, pixelByte *O, pixelByte g, float sigma, float alpha, unsigned width, unsigned height){
   // f function is taken polinomial(at least a power function)
   int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
 
-  int i;
-  if(I[x] < g){
-    i = g - sigma*powf( (g - I[x]) / sigma, alpha);
-  }else{
-    i = g + sigma*powf( (I[x] - g) / sigma, alpha);
+  double out;
+
+  // Map to [0,1]
+  double iD = (double) I[x] / 255;
+  double gD = (double) g / 255;
+
+  double diffAbs = iD - gD;
+  int sign = 1;
+  if(diffAbs < 0){
+    sign = -1;
+    diffAbs = -diffAbs;
   }
+
+  if(diffAbs < sigma){
+    out = gD + sign*sigma*powf( diffAbs / sigma, alpha); // r_d
+  }else{
+    out = gD + sign*powf( (diffAbs - sigma) + sigma, alpha); // r_e
+  }
+
+  // Remap to [0,255]
+  int i = out * 255;
+
   if(i > 255){
     O[x] = 255;
   }else if(i < 0){
@@ -19,7 +35,7 @@ __global__ void _r           (pixelByte *I, pixelByte *O, pixelByte g, float sig
     O[x] = i;
   }
 }
-__global__ void _upSample2    (pixelByte *in, pixelByte *out, int width, int height){
+__global__ void _upSample2      (pixelByte *in, pixelByte *out, int width, int height){
   int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
 
 
@@ -46,7 +62,7 @@ __global__ void _upSample2    (pixelByte *in, pixelByte *out, int width, int hei
     out[(x%width)*2 + x/width*(width*4)+1+width*2] = in[x];
   }
 }
-__global__ void _setLaplacian(pixelByte *inPic, pixelByte *laplacian, unsigned width, unsigned height){
+__global__ void _setLaplacian   (pixelByte *inPic, pixelByte *laplacian, unsigned width, unsigned height){
   /*
    * Set laplacian to recover the deleted data for Gaussian filter, not reduced size.
    */
@@ -64,6 +80,7 @@ __global__ void _setLaplacian(pixelByte *inPic, pixelByte *laplacian, unsigned w
   }
 
 }
+// __global__ void _getNeighborhood()
 
 void localLaplacianPyramid(char *inputPath,
                            char *outputPath,
@@ -87,8 +104,8 @@ void localLaplacianPyramid(char *inputPath,
 
   for(int l = 0; l<pyramidHeight; l++){
 
-    unsigned width  = laplacianP->getLayer(l)->width;
-    unsigned height = laplacianP->getLayer(l)->height;
+    unsigned width  = inPic.width / std::pow(2, l);
+    unsigned height = inPic.height/ std::pow(2, l);
 
     for(int y = 0; y<height; y++){
       for(int x = 0; x<width; x++){
@@ -116,7 +133,16 @@ void localLaplacianPyramid(char *inputPath,
     }
   }
 
+  char outFileTemp[50];
 
+  for(int i = 0; i<pyramidHeight; i++){
+    sprintf(outFileTemp, "%s%d.ppm", "outputP", i);
+    outputP->getLayer(i)->write(outFileTemp);
+  }
+  for(int i = 0; i<pyramidHeight; i++){
+    sprintf(outFileTemp, "%s%d.ppm", "laplacianP", i);
+    laplacianP->getLayer(i)->write(outFileTemp);
+  }
   // Collapse the pyramid
   for(int i = pyramidHeight-1; i > 0; i--){
     unsigned width  = gaussianP->getLayer(i-1)->width;
