@@ -22,14 +22,29 @@ __global__ void _r           (pixelByte *I, pixelByte *O, pixelByte g, float sig
 __global__ void _upSample2    (pixelByte *in, pixelByte *out, int width, int height){
   int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
 
+
   if(x > width*height-1){
     return;
   }
 
-  out[(x%width)*2 + x/width*(width*4)]           = in[x];
-  out[(x%width)*2 + x/width*(width*4)+1]         = in[x]; // 1 sagi
-  out[(x%width)*2 + x/width*(width*4)+width*2]   = in[x]; // 1 alti 1 sagi
-  out[(x%width)*2 + x/width*(width*4)+1+width*2] = in[x]; // 1 sagi 1 alti
+  out[(x%width)*2 + x/width*(width*4)] = in[x];
+
+  if((x+1)%width != 0){ // 1 sagi
+    // No row change
+    out[(x%width)*2 + x/width*(width*4)+1] = (in[x+1] + in[x]) / 2;
+  }else{
+    out[(x%width)*2 + x/width*(width*4)+1] = in[x];
+  }
+  if((x+width)/width < height){ // 1 alti
+    out[(x%width)*2 + x/width*(width*4)+width*2] = (in[x+width] + in[x]) / 2;
+  }else{
+    out[(x%width)*2 + x/width*(width*4)+width*2] = in[x];
+  }
+  if((x+width)/width < height && (x+1)%width != 0){
+    out[(x%width)*2 + x/width*(width*4)+1+width*2] = (in[x+1] + in[x] + in[x+width] + in[x+width+1]) / 4; // 1 sagi 1 alti
+  }else{
+    out[(x%width)*2 + x/width*(width*4)+1+width*2] = in[x];
+  }
 }
 __global__ void _setLaplacian(pixelByte *inPic, pixelByte *laplacian, unsigned width, unsigned height){
   /*
@@ -69,7 +84,6 @@ void localLaplacianPyramid(char *inputPath,
   laplacianP->createLaplacian(&inPic, pyramidHeight);
 
   outputP->createLaplacian(&inPic, pyramidHeight);
-  outputP->getLayer(0)->write("YAZKIZIM1.ppm");
 
   for(int l = 0; l<pyramidHeight; l++){
 
@@ -97,7 +111,7 @@ void localLaplacianPyramid(char *inputPath,
 
         // Update output pyramid
         Pixel p = nLaplacianP.getLayer(l)->getPixel(x, y);
-        // outputP->getLayer(l)->setPixel(x, y, p);
+        outputP->getLayer(l)->setPixel(x, y, p);
       }
     }
   }
