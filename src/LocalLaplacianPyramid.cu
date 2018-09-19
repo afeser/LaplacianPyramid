@@ -21,7 +21,9 @@ __global__ void _r              (pixelByte *I, pixelByte *O, pixelByte g, float 
   if(diffAbs < sigma){
     out = gD + sign*sigma*powf( diffAbs / sigma, alpha); // r_d
   }else{
-    out = gD + sign*powf( (diffAbs - sigma) + sigma, alpha); // r_e
+    out = gD + sign*(
+                      powf( (diffAbs - sigma), alpha) + sigma
+                    ); // r_e
   }
 
   // Remap to [0,255]
