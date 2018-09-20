@@ -42,6 +42,7 @@ int main(int argc, char *argv[]){
       help();
       return 0;
     }
+    return 0;
   }
 
   if(!strcmp(argv[1], "pyramid")){
@@ -77,17 +78,18 @@ int main(int argc, char *argv[]){
       help();
       return 0;
     }
+
+    return 0;
   }
 
   if(!strcmp(argv[1], "localLaplacian")){
     char inFileElma[]    = "data/Sample.ppm";
     char outFile[]       = "output/LocalLaplacianSample.ppm";
 
-    const float sigma         = 0.2f;
-    const float alpha         = 0.25f;
-
     int pyramidHeight       = atoi(argv[2]);
     int number_of_additions = atoi(argv[3]);
+    float sigma             = atof(argv[4]);
+    float alpha             = atof(argv[5]);
 
     localLaplacianPyramid(inFileElma,
                           outFile,
@@ -96,6 +98,12 @@ int main(int argc, char *argv[]){
                           pyramidHeight,
                           number_of_additions
                         );
+
+    return 0;
   }
+
+  help();
+
+  return 0;
 
 }

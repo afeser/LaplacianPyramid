@@ -154,8 +154,6 @@ void localLaplacianPyramid(char *inputPath,
       _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianP->getLayer(i-1)->G, outputP->getLayer(i-1)->G, width, height);
       _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianP->getLayer(i-1)->B, outputP->getLayer(i-1)->B, width, height);
     }
-
-        gaussianP->getLayer(i-1)->write("Gaussed.ppm");
   }
   gaussianP->getLayer(0)->write(outputPath);
 
