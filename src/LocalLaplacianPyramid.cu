@@ -72,7 +72,7 @@ __global__ void _setLaplacian   (pixelByte *inPic, pixelByte *laplacian, unsigne
   int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
 
   int i;
-  i = inPic[x] + laplacian[x] - 128;
+  i = inPic[x] - laplacian[x] + 128;
   if(i < 0){
    inPic[x] = 0;
   }else if(i > 255){
@@ -82,7 +82,6 @@ __global__ void _setLaplacian   (pixelByte *inPic, pixelByte *laplacian, unsigne
   }
 
 }
-// __global__ void _getNeighborhood()
 
 void localLaplacianPyramid(char *inputPath,
                            char *outputPath,
@@ -135,16 +134,6 @@ void localLaplacianPyramid(char *inputPath,
     }
   }
 
-  char outFileTemp[50];
-
-  for(int i = 0; i<pyramidHeight; i++){
-    sprintf(outFileTemp, "%s%d.ppm", "outputP", i);
-    outputP->getLayer(i)->write(outFileTemp);
-  }
-  for(int i = 0; i<pyramidHeight; i++){
-    sprintf(outFileTemp, "%s%d.ppm", "laplacianP", i);
-    laplacianP->getLayer(i)->write(outFileTemp);
-  }
   // Collapse the pyramid
   for(int i = pyramidHeight-1; i > 0; i--){
     unsigned width  = gaussianP->getLayer(i-1)->width;
@@ -165,6 +154,8 @@ void localLaplacianPyramid(char *inputPath,
       _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianP->getLayer(i-1)->G, outputP->getLayer(i-1)->G, width, height);
       _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianP->getLayer(i-1)->B, outputP->getLayer(i-1)->B, width, height);
     }
+
+        gaussianP->getLayer(i-1)->write("Gaussed.ppm");
   }
   gaussianP->getLayer(0)->write(outputPath);
 
