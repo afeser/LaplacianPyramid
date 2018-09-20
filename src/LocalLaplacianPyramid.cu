@@ -23,7 +23,7 @@ __global__ void _r              (pixelByte *I, pixelByte *O, pixelByte g, float 
   }else{
     out = gD + sign*(
                       powf( (diffAbs - sigma), alpha) + sigma
-                    ); // r_e
+                    ) ; // r_e
   }
 
   // Remap to [0,255]
@@ -82,7 +82,23 @@ __global__ void _setLaplacian   (pixelByte *inPic, pixelByte *laplacian, unsigne
   }
 
 }
-// __global__ void _getNeighborhood()
+__global__ void _getNeighborhood(pixelByte *motherPic, pixelByte *outPic, unsigned edgeLen, unsigned width, unsigned height, unsigned x, unsigned y){
+  int i = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
+
+  int gercek = (i/edgeLen)*width + i%edgeLen + (x - (edgeLen/2 - 1)) + (y - (edgeLen/2 - 1))*width;
+
+  if(gercek/width != (gercek+edgeLen-i%edgeLen)/width){
+    outPic[i] = 0;
+    return;
+  }
+  if(gercek < 0 || gercek > width*height - 1){
+    outPic[i] = 0;
+    return;
+  }
+
+  outPic[i] = motherPic[gercek];
+
+}
 
 void localLaplacianPyramid(char *inputPath,
                            char *outputPath,
@@ -109,42 +125,45 @@ void localLaplacianPyramid(char *inputPath,
     unsigned width  = inPic.width / std::pow(2, l);
     unsigned height = inPic.height/ std::pow(2, l);
 
+    unsigned edgeLen = (unsigned) std::pow(2, l);
+    unsigned padding    = (unsigned) std::pow(2, l) * 2; // bunun sayesinde civarindaki Gaussian'lari hesaplayabilecegiz ( (kernelSize - 1) / 2)
+
+    edgeLen += 2*padding; // 2 taraftam
+
     for(int y = 0; y<height; y++){
       for(int x = 0; x<width; x++){
         // Get Gaussian average for each layer
         Pixel g = gaussianP->getLayer(l)->getPixel(x, y);
 
+        // Determine the area
+        dim3 dimBlockEdge(BLOCK_SIZE, BLOCK_SIZE);
+        dim3 dimGridEdge (edgeLen/BLOCK_SIZE, edgeLen/BLOCK_SIZE);
+        Picture area(edgeLen, edgeLen, true);
+        _getNeighborhood<<<dimGridEdge, dimBlockEdge>>>(inPic.R, area.R, edgeLen, inPic.width, inPic.height, x, y);
+        _getNeighborhood<<<dimGridEdge, dimBlockEdge>>>(inPic.G, area.G, edgeLen, inPic.width, inPic.height, x, y);
+        _getNeighborhood<<<dimGridEdge, dimBlockEdge>>>(inPic.B, area.B, edgeLen, inPic.width, inPic.height, x, y);
+
         // Map to a new image
         dim3 dimBlock2(BLOCK_SIZE, BLOCK_SIZE);
         dim3 dimGrid2 (inPic.width/BLOCK_SIZE, inPic.height/BLOCK_SIZE);
-        Picture mapped(inPic.width, inPic.height, true);
+        Picture mapped(edgeLen, edgeLen, true);
 
         // Converting the base image to a new mapped image
-        _r<<<dimGrid2, dimBlock2>>>(inPic.R, mapped.R, g.R, sigma, alpha, inPic.width, inPic.height);
-        _r<<<dimGrid2, dimBlock2>>>(inPic.G, mapped.G, g.G, sigma, alpha, inPic.width, inPic.height);
-        _r<<<dimGrid2, dimBlock2>>>(inPic.B, mapped.B, g.B, sigma, alpha, inPic.width, inPic.height);
+        _r<<<dimGrid2, dimBlock2>>>(area.R, mapped.R, g.R, sigma, alpha, edgeLen, edgeLen);
+        _r<<<dimGrid2, dimBlock2>>>(area.G, mapped.G, g.G, sigma, alpha, edgeLen, edgeLen);
+        _r<<<dimGrid2, dimBlock2>>>(area.B, mapped.B, g.B, sigma, alpha, edgeLen, edgeLen);
 
         // Find new Laplacian Pyramid for the mapped image
         Pyramid nLaplacianP;
-        nLaplacianP.createLaplacian(&mapped, l+1); // burasi cooook buyuk memory kaplayacak is bittikten sonra silmezsek!!!
+        nLaplacianP.createLaplacian(&mapped, l+1);
 
         // Update output pyramid
-        Pixel p = nLaplacianP.getLayer(l)->getPixel(x, y);
+        Pixel p = nLaplacianP.getLayer(l)->getPixel(edgeLen/2 - 1, edgeLen/2 - 1);
         outputP->getLayer(l)->setPixel(x, y, p);
       }
     }
   }
 
-  char outFileTemp[50];
-
-  for(int i = 0; i<pyramidHeight; i++){
-    sprintf(outFileTemp, "%s%d.ppm", "outputP", i);
-    outputP->getLayer(i)->write(outFileTemp);
-  }
-  for(int i = 0; i<pyramidHeight; i++){
-    sprintf(outFileTemp, "%s%d.ppm", "laplacianP", i);
-    laplacianP->getLayer(i)->write(outFileTemp);
-  }
   // Collapse the pyramid
   for(int i = pyramidHeight-1; i > 0; i--){
     unsigned width  = gaussianP->getLayer(i-1)->width;

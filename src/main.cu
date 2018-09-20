@@ -80,11 +80,11 @@ int main(int argc, char *argv[]){
   }
 
   if(!strcmp(argv[1], "localLaplacian")){
-    char inFileElma[]    = "data/Sample.ppm";
-    char outFile[]       = "output/LocalLaplacianSample.ppm";
+    char inFileElma[] = "data/Sample.ppm";
+    char outFile[]    = "output/LocalLaplacianSample.ppm";
 
-    const float sigma         = 0.4f;
-    const float alpha         = 0.25f;
+    const float sigma = 0.3f;
+    const float alpha = 0.25f;
 
     int pyramidHeight       = atoi(argv[2]);
     int number_of_additions = atoi(argv[3]);
