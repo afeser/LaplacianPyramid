@@ -1,52 +1,21 @@
 #include "ppm.hpp"
 #include "pyramid.hpp"
 
-__global__ void _r(pixelByte *I, pixelByte *O, unsigned width, unsigned height, int fact, double ref, double sigma){
+__global__ void _llf(pixelByte *I, pixelByte *O, unsigned width, unsigned height, int fact, float ref, float sigma){
   int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
 
-  double out;
-
-  // Map to [0,1]
-  double iD = (double) I[x] / 255;
-
-  out = fact*(iD - ref) * exp(
-                                - (iD-ref) * (iD-ref) / (2 * sigma * sigma)
+  O[x] = fact*(I[x] - ref) * expf(
+                                - (I[x]-ref) * (I[x]-ref) / (2 * sigma * sigma)
                               );
 
-
-  // Remap to [0,255]
-  int i = out * 255;
-
-  if(i > 255){
-    O[x] = 255;
-  }else if(i < 0){
-    O[x] = 0;
-  }else{
-    O[x] = i;
-  }
 }
-__global__ void updateOutputLaplacian(pixelByte *tempLaplace, pixelByte *outLaplace, pixelByte *gaussian, unsigned width, unsigned height, double ref, double discretisation_step){
+__global__ void updateOutputLaplacian(pixelByte *tempLaplace, pixelByte *outLaplace, pixelByte *gaussian, unsigned width, unsigned height, float ref, float discretisation_step){
   int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
 
-  double out     = (double) outLaplace[x] / 255;
-  double gauss   = (double) gaussian[x] / 255;
-  double tempLap = (double) tempLaplace[x] / 255;
+  outLaplace[x] += (fabsf(gaussian[x] - ref) < discretisation_step) *
+                   tempLaplace[x] *
+                   (1 - fabsf(gaussian[x] - ref) / discretisation_step);
 
-  out += (fabsf(gauss - ref) < discretisation_step) *
-         tempLap *
-         (1 - fabsf(gauss - ref) / discretisation_step);
-
-
-  // Remap to [0,255]
-  int i = out * 255;
-
-  if(i > 255){
-    outLaplace[x] = 255;
-  }else if(i < 0){
-    outLaplace[x] = 0;
-  }else{
-    outLaplace[x] = i;
-  }
 }
 
 __global__ void _upSample2      (pixelByte *in, pixelByte *out, int width, int height){
@@ -83,29 +52,23 @@ __global__ void _setLaplacian   (pixelByte *inPic, pixelByte *laplacian, unsigne
 
   int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
 
-  int i;
-  i = inPic[x] - laplacian[x] + 128;
-  if(i < 0){
-   inPic[x] = 0;
-  }else if(i > 255){
-   inPic[x] = 255;
-  }else{
-   inPic[x] = i;
-  }
+  inPic[x] = inPic[x] - laplacian[x];
+
 
 }
 
 void localLaplacianPyramid(char *inputPath,
                            char *outputPath,
                            const float sigma,
-                           const int pyramidHeight
+                           const int pyramidHeight,
+                           const int fact,
+                           const int N
                            ){
 
 
   Picture inPic(inputPath, true);
 
-  const int fact = 5;
-  const double discretisation_step =  1.0 /  fact;
+  const float discretisation_step =  1.0 /  (N-1); // linespace tanimi boyle cunku
 
   Pyramid *gaussianP = new Pyramid();
   Pyramid *outputP = new Pyramid();
@@ -114,18 +77,16 @@ void localLaplacianPyramid(char *inputPath,
 
   outputP->createLaplacian(&inPic, pyramidHeight);
 
-  for(double ref = 0; ref<1; ref+=discretisation_step){
+  for(float ref = 0; ref<=1; ref+=discretisation_step){
     // Map to a new image
     dim3 dimBlock2(BLOCK_SIZE, BLOCK_SIZE);
     dim3 dimGrid2 (inPic.width/BLOCK_SIZE, inPic.height/BLOCK_SIZE);
     Picture mapped(inPic.width, inPic.height, true);
 
     // Converting the base image to a new mapped image
-    _r<<<dimGrid2, dimBlock2>>>(inPic.R, mapped.R, inPic.width, inPic.height, fact, ref, sigma);
-    _r<<<dimGrid2, dimBlock2>>>(inPic.G, mapped.G, inPic.width, inPic.height, fact, ref, sigma);
-    _r<<<dimGrid2, dimBlock2>>>(inPic.B, mapped.B, inPic.width, inPic.height, fact, ref, sigma);
-
-    mapped.write("HARITALI200EKLE.ppm");
+    _llf<<<dimGrid2, dimBlock2>>>(inPic.R, mapped.R, inPic.width, inPic.height, fact, ref, sigma);
+    _llf<<<dimGrid2, dimBlock2>>>(inPic.G, mapped.G, inPic.width, inPic.height, fact, ref, sigma);
+    _llf<<<dimGrid2, dimBlock2>>>(inPic.B, mapped.B, inPic.width, inPic.height, fact, ref, sigma);
 
     // Find new Laplacian Pyramid from the mapped image
     Pyramid tempLaplacian;
@@ -140,11 +101,14 @@ void localLaplacianPyramid(char *inputPath,
       dim3 dimGrid (width/BLOCK_SIZE, height/BLOCK_SIZE);
 
       updateOutputLaplacian<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->R, outputP->getLayer(l)->R, gaussianP->getLayer(l)->R, width, height, ref, discretisation_step);
-      updateOutputLaplacian<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->G, outputP->getLayer(l)->G, gaussianP->getLayer(l)->R, width, height, ref, discretisation_step);
-      updateOutputLaplacian<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->B, outputP->getLayer(l)->B, gaussianP->getLayer(l)->R, width, height, ref, discretisation_step);
+      updateOutputLaplacian<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->G, outputP->getLayer(l)->G, gaussianP->getLayer(l)->G, width, height, ref, discretisation_step);
+      updateOutputLaplacian<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->B, outputP->getLayer(l)->B, gaussianP->getLayer(l)->B, width, height, ref, discretisation_step);
     }
 
   }
+  Pyramid piramit = Pyramid();
+  piramit.createLaplacian(&inPic, 5);
+  piramit.getLayer(0)->write("GERCEKLAPLAS.ppm");
   outputP->getLayer(0)->write("LAPLACIAN.ppm");
 
   // Collapse the pyramid
