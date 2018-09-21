@@ -13,7 +13,7 @@ void help(){
   printf("command pyramid laplacian height\n");
   printf("command pyramid gaussian height\n\n");
 
-  printf("command localLaplacian height number_of_additions\n");
+  printf("command localLaplacian pyramidHeight sigma\n");
 }
 
 
@@ -88,17 +88,13 @@ int main(int argc, char *argv[]){
     char outFile[]       = "output/LocalLaplacianSample.ppm";
 
     int pyramidHeight       = atoi(argv[2]);
-    int number_of_additions = atoi(argv[3]);
-    float sigma             = atof(argv[4]);
-    float alpha             = atof(argv[5]);
+    float sigma             = atof(argv[3]);
 
     localLaplacianPyramid(inFileElma,
                           outFile,
                           sigma,
-                          alpha,
-                          pyramidHeight,
-                          number_of_additions
-                        );
+                          pyramidHeight
+                         );
 
     return 0;
   }
