@@ -3,6 +3,7 @@
 #include "LaplacianPyramid.cu"
 #include "LocalLaplacianPyramid.cu"
 #include <string.h>
+#include <stdio.h>
 
 void help(){
   printf("Use : \n");

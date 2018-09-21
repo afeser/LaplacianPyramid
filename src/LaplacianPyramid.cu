@@ -431,7 +431,7 @@ void gaussianBenchmark(int block_size){
   char inFile[]  = "data/adrian/current.ppm";
   char outFile[] = "output/adrianCurrent.ppm";
   Picture pic1 = Picture(inFile, true);
-  printf("%d, ", pic1.width);
+
   Picture pic2 = Picture(pic1.width, pic1.height, true);
 
   dim3 dimBlock2(block_size, block_size);
@@ -448,7 +448,7 @@ void gaussianBenchmarkCPU(){
   char inFile[]  = "data/adrian/current.ppm";
   char outFile[] = "output/adrianCurrent.ppm";
   Picture pic1 = Picture(inFile, false);
-  printf("%d, ", pic1.width);
+
   Picture pic2 = Picture(pic1.width, pic1.height, false);
 
   dim3 dimBlock2(BLOCK_SIZE, BLOCK_SIZE);
