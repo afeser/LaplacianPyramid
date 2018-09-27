@@ -77,7 +77,7 @@ void localLaplacianPyramid(char *inputPath,
   const float discretisation_step =  1.0 /  (N-1); // linespace tanimi boyle cunku
 
   Pyramid gaussianGrayScale; // to process
-  Pyramid *outputP = new Pyramid();
+  Pyramid outputP;;
   Picture inPicGray = Picture(&inPic);
   inPicGray.toGrayScale();
   Picture ratioPic  = Picture(inPic.width, inPic.height, true);
@@ -91,23 +91,23 @@ void localLaplacianPyramid(char *inputPath,
 
 
   gaussianGrayScale.createGaussian(&inPicGray, pyramidHeight);
-  outputP->createLaplacian(&inPicGray, pyramidHeight); // to match dimensions !! garip bir sekilde bunu inPic olarak alirken halo problem ortaya cikiyordu,  inPicGray yaptim duzeldi???(en ustteki islemedigimiz yuzunden mi acaba)?
+  outputP.createLaplacian(&inPicGray, pyramidHeight);
+
+  Picture mapped(inPic.width, inPic.height, true);
 
   for(float ref = 0; ref<=1; ref+=discretisation_step){
     // Map to a new image
     dim3 dimBlock2(BLOCK_SIZE, BLOCK_SIZE);
     dim3 dimGrid2 (inPic.width/BLOCK_SIZE, inPic.height/BLOCK_SIZE);
-    Picture mapped(inPic.width, inPic.height, true);
 
     // Converting the base image to a new mapped image
     _llf<<<dimGrid2, dimBlock2>>>(inPicGray.R, mapped.R, inPic.width, inPic.height, fact, ref, sigma);
     _llf<<<dimGrid2, dimBlock2>>>(inPicGray.G, mapped.G, inPic.width, inPic.height, fact, ref, sigma);
     _llf<<<dimGrid2, dimBlock2>>>(inPicGray.B, mapped.B, inPic.width, inPic.height, fact, ref, sigma);
-
     // Find new Laplacian Pyramid from the mapped image
     Pyramid tempLaplacian;
     tempLaplacian.createLaplacian(&mapped, pyramidHeight);
-
+    
     // Do for all layers
     for(int l = 0; l<pyramidHeight; l++){
       unsigned width  = inPic.width /std::pow(2, l);
@@ -116,9 +116,9 @@ void localLaplacianPyramid(char *inputPath,
       dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
       dim3 dimGrid (width/BLOCK_SIZE, height/BLOCK_SIZE);
 
-      updateOutputLaplacian<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->R, outputP->getLayer(l)->R, gaussianGrayScale.getLayer(l)->R, width, height, ref, discretisation_step);
-      updateOutputLaplacian<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->G, outputP->getLayer(l)->G, gaussianGrayScale.getLayer(l)->G, width, height, ref, discretisation_step);
-      updateOutputLaplacian<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->B, outputP->getLayer(l)->B, gaussianGrayScale.getLayer(l)->B, width, height, ref, discretisation_step);
+      updateOutputLaplacian<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->R, outputP.getLayer(l)->R, gaussianGrayScale.getLayer(l)->R, width, height, ref, discretisation_step);
+      updateOutputLaplacian<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->G, outputP.getLayer(l)->G, gaussianGrayScale.getLayer(l)->G, width, height, ref, discretisation_step);
+      updateOutputLaplacian<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->B, outputP.getLayer(l)->B, gaussianGrayScale.getLayer(l)->B, width, height, ref, discretisation_step);
     }
 
   }
@@ -138,9 +138,9 @@ void localLaplacianPyramid(char *inputPath,
     _upSample2<<<dimGrid, dimBlock>>>(gaussianGrayScale.getLayer(i)->G, gaussianGrayScale.getLayer(i-1)->G, width/2, height/2);
     _upSample2<<<dimGrid, dimBlock>>>(gaussianGrayScale.getLayer(i)->B, gaussianGrayScale.getLayer(i-1)->B, width/2, height/2);
 
-    _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->R, outputP->getLayer(i-1)->R, width, height);
-    _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->G, outputP->getLayer(i-1)->G, width, height);
-    _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->B, outputP->getLayer(i-1)->B, width, height);
+    _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->R, outputP.getLayer(i-1)->R, width, height);
+    _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->G, outputP.getLayer(i-1)->G, width, height);
+    _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->B, outputP.getLayer(i-1)->B, width, height);
   }
 
   // Set ratio
