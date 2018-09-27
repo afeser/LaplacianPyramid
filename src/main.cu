@@ -15,6 +15,8 @@ void help(){
 
   printf("command localLaplacian pyramidHeight sigma fact N\n");
 
+  printf("command localLaplacianGeneral pyramidHeight N\n");
+
   printf("command blend inputPicture1 inputPicture2 outputPicture pyramidHeight\n");
 }
 
@@ -99,6 +101,22 @@ int main(int argc, char *argv[]){
                           sigma,
                           pyramidHeight,
                           fact,
+                          N
+                         );
+
+    return 0;
+  }
+
+  if(!strcmp(argv[1], "localLaplacianGeneral")){
+    char inFileElma[]    = "data/Sample.ppm";
+    char outFile[]       = "output/LocalLaplacianSample.ppm";
+
+    unsigned pyramidHeight = atoi(argv[2]);
+    int N                  = atof(argv[3]);
+
+    localLaplacianPyramidLLF_GENERAL(inFileElma,
+                          outFile,
+                          pyramidHeight,
                           N
                          );
 
