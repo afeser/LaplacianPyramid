@@ -9,10 +9,10 @@ __global__ void _llf(pixelByte *I, pixelByte *O, unsigned width, unsigned height
                               );
 
 }
-__global__ void _llf_general(pixelByte *I, pixelByte *O, unsigned width, unsigned height){
+__global__ void _llf_general(pixelByte *I, pixelByte *O, unsigned width, unsigned height, unsigned ref){
   int index = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
 
-  pixelByte x = I[index];
+  pixelByte x = I[index] - ref;
   O[index] = 3 * x * (fabsf(x) < 0.1)
            + (x + 0.2) * (x > 0.1)
            + (x - 0.2) * (x < -0.1);
@@ -109,9 +109,9 @@ void localLaplacianPyramidLLF_GENERAL(char *inputPath,
     dim3 dimGrid2 (inPic.width/BLOCK_SIZE, inPic.height/BLOCK_SIZE);
 
     // Converting the base image to a new mapped image
-    _llf_general<<<dimGrid2, dimBlock2>>>(inPicGray.R, mapped.R, inPic.width, inPic.height);
-    _llf_general<<<dimGrid2, dimBlock2>>>(inPicGray.G, mapped.G, inPic.width, inPic.height);
-    _llf_general<<<dimGrid2, dimBlock2>>>(inPicGray.B, mapped.B, inPic.width, inPic.height);
+    _llf_general<<<dimGrid2, dimBlock2>>>(inPicGray.R, mapped.R, inPic.width, inPic.height, ref);
+    // _llf_general<<<dimGrid2, dimBlock2>>>(inPicGray.G, mapped.G, inPic.width, inPic.height, ref);
+    // _llf_general<<<dimGrid2, dimBlock2>>>(inPicGray.B, mapped.B, inPic.width, inPic.height, ref);
 
     // Find new Laplacian Pyramid from the mapped image
     Pyramid tempLaplacian;
@@ -126,8 +126,8 @@ void localLaplacianPyramidLLF_GENERAL(char *inputPath,
       dim3 dimGrid (width/BLOCK_SIZE, height/BLOCK_SIZE);
 
       updateOutputLaplacianGeneral<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->R, outputP.getLayer(l)->R, gaussianGrayScale.getLayer(l)->R, width, height, ref, discretisation_step);
-      updateOutputLaplacianGeneral<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->G, outputP.getLayer(l)->G, gaussianGrayScale.getLayer(l)->G, width, height, ref, discretisation_step);
-      updateOutputLaplacianGeneral<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->B, outputP.getLayer(l)->B, gaussianGrayScale.getLayer(l)->B, width, height, ref, discretisation_step);
+      // updateOutputLaplacianGeneral<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->G, outputP.getLayer(l)->G, gaussianGrayScale.getLayer(l)->G, width, height, ref, discretisation_step);
+      // updateOutputLaplacianGeneral<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->B, outputP.getLayer(l)->B, gaussianGrayScale.getLayer(l)->B, width, height, ref, discretisation_step);
     }
   }
 
@@ -143,18 +143,18 @@ void localLaplacianPyramidLLF_GENERAL(char *inputPath,
     dim3 dimGrid2 (width/BLOCK_SIZE, height/BLOCK_SIZE);
 
     _upSample2<<<dimGrid, dimBlock>>>(gaussianGrayScale.getLayer(i)->R, gaussianGrayScale.getLayer(i-1)->R, width/2, height/2);
-    _upSample2<<<dimGrid, dimBlock>>>(gaussianGrayScale.getLayer(i)->G, gaussianGrayScale.getLayer(i-1)->G, width/2, height/2);
-    _upSample2<<<dimGrid, dimBlock>>>(gaussianGrayScale.getLayer(i)->B, gaussianGrayScale.getLayer(i-1)->B, width/2, height/2);
+    // _upSample2<<<dimGrid, dimBlock>>>(gaussianGrayScale.getLayer(i)->G, gaussianGrayScale.getLayer(i-1)->G, width/2, height/2);
+    // _upSample2<<<dimGrid, dimBlock>>>(gaussianGrayScale.getLayer(i)->B, gaussianGrayScale.getLayer(i-1)->B, width/2, height/2);
 
     _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->R, outputP.getLayer(i-1)->R, width, height);
-    _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->G, outputP.getLayer(i-1)->G, width, height);
-    _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->B, outputP.getLayer(i-1)->B, width, height);
+    // _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->G, outputP.getLayer(i-1)->G, width, height);
+    // _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->B, outputP.getLayer(i-1)->B, width, height);
   }
 
   // Set ratio
   setRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(ratioPic.R, gaussianGrayScale.getLayer(0)->R);
-  setRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(ratioPic.G, gaussianGrayScale.getLayer(0)->G);
-  setRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(ratioPic.B, gaussianGrayScale.getLayer(0)->B);
+  setRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(ratioPic.G, gaussianGrayScale.getLayer(0)->R);
+  setRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(ratioPic.B, gaussianGrayScale.getLayer(0)->R);
 
   ratioPic.write(outputPath);
 }
@@ -196,8 +196,8 @@ void localLaplacianPyramid(char *inputPath,
 
     // Converting the base image to a new mapped image
     _llf<<<dimGrid2, dimBlock2>>>(inPicGray.R, mapped.R, inPic.width, inPic.height, fact, ref, sigma);
-    _llf<<<dimGrid2, dimBlock2>>>(inPicGray.G, mapped.G, inPic.width, inPic.height, fact, ref, sigma);
-    _llf<<<dimGrid2, dimBlock2>>>(inPicGray.B, mapped.B, inPic.width, inPic.height, fact, ref, sigma);
+    // _llf<<<dimGrid2, dimBlock2>>>(inPicGray.G, mapped.G, inPic.width, inPic.height, fact, ref, sigma);
+    // _llf<<<dimGrid2, dimBlock2>>>(inPicGray.B, mapped.B, inPic.width, inPic.height, fact, ref, sigma);
 
     // Find new Laplacian Pyramid from the mapped image
     Pyramid tempLaplacian;
@@ -212,8 +212,8 @@ void localLaplacianPyramid(char *inputPath,
       dim3 dimGrid (width/BLOCK_SIZE, height/BLOCK_SIZE);
 
       updateOutputLaplacian<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->R, outputP.getLayer(l)->R, gaussianGrayScale.getLayer(l)->R, width, height, ref, discretisation_step);
-      updateOutputLaplacian<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->G, outputP.getLayer(l)->G, gaussianGrayScale.getLayer(l)->G, width, height, ref, discretisation_step);
-      updateOutputLaplacian<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->B, outputP.getLayer(l)->B, gaussianGrayScale.getLayer(l)->B, width, height, ref, discretisation_step);
+      // updateOutputLaplacian<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->G, outputP.getLayer(l)->G, gaussianGrayScale.getLayer(l)->G, width, height, ref, discretisation_step);
+      // updateOutputLaplacian<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->B, outputP.getLayer(l)->B, gaussianGrayScale.getLayer(l)->B, width, height, ref, discretisation_step);
     }
 
   }
@@ -230,18 +230,18 @@ void localLaplacianPyramid(char *inputPath,
     dim3 dimGrid2 (width/BLOCK_SIZE, height/BLOCK_SIZE);
 
     _upSample2<<<dimGrid, dimBlock>>>(gaussianGrayScale.getLayer(i)->R, gaussianGrayScale.getLayer(i-1)->R, width/2, height/2);
-    _upSample2<<<dimGrid, dimBlock>>>(gaussianGrayScale.getLayer(i)->G, gaussianGrayScale.getLayer(i-1)->G, width/2, height/2);
-    _upSample2<<<dimGrid, dimBlock>>>(gaussianGrayScale.getLayer(i)->B, gaussianGrayScale.getLayer(i-1)->B, width/2, height/2);
+    // _upSample2<<<dimGrid, dimBlock>>>(gaussianGrayScale.getLayer(i)->G, gaussianGrayScale.getLayer(i-1)->G, width/2, height/2);
+    // _upSample2<<<dimGrid, dimBlock>>>(gaussianGrayScale.getLayer(i)->B, gaussianGrayScale.getLayer(i-1)->B, width/2, height/2);
 
     _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->R, outputP.getLayer(i-1)->R, width, height);
-    _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->G, outputP.getLayer(i-1)->G, width, height);
-    _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->B, outputP.getLayer(i-1)->B, width, height);
+    // _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->G, outputP.getLayer(i-1)->G, width, height);
+    // _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->B, outputP.getLayer(i-1)->B, width, height);
   }
 
   // Set ratio
-  setRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(gaussianGrayScale.getLayer(0)->R, ratioPic.R);
-  setRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(gaussianGrayScale.getLayer(0)->G, ratioPic.G);
-  setRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(gaussianGrayScale.getLayer(0)->B, ratioPic.B);
+  setRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(ratioPic.R, gaussianGrayScale.getLayer(0)->R);
+  setRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(ratioPic.G, gaussianGrayScale.getLayer(0)->R);
+  setRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(ratioPic.B, gaussianGrayScale.getLayer(0)->R);
 
-  gaussianGrayScale.getLayer(0)->write(outputPath);
+  ratioPic.write(outputPath);
 }
