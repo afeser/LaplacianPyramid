@@ -14,6 +14,8 @@ void help(){
   printf("command pyramid gaussian height\n\n");
 
   printf("command localLaplacian pyramidHeight sigma fact N\n");
+
+  printf("command blend inputPicture1 inputPicture2 outputPicture pyramidHeight\n");
 }
 
 
@@ -103,6 +105,11 @@ int main(int argc, char *argv[]){
     return 0;
   }
 
+  if(!strcmp(argv[1], "blend")){
+    blendElmaPortakal(argv[2], argv[3], argv[4], atoi(argv[5]));
+
+    return 0;
+  }
   help();
 
   return 0;
