@@ -1,6 +1,7 @@
 CC           = nvcc
 BIN_DIR      = "bin"
 SRC_DIR      = "src"
+OUT_DIR      = "output"
 LIBRARY_PATH = "/home/afeser/Dropbox/Documents/Canavarr/Pratik/MyLibrary/lib"
 INCLUDE_PATH = "/home/afeser/Dropbox/Documents/Canavarr/Pratik/MyLibrary/include"
 
@@ -13,6 +14,7 @@ Convolver:
 
 createDirs:
 	mkdir -p $(BIN_DIR)
+	mkdir -p $(OUT_DIR)
 
 MyLib:
 	cd /home/afeser/Dropbox/Documents/Canavarr/Pratik/MyLibrary && $(MAKE)
