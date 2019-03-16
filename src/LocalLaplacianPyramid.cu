@@ -1,42 +1,46 @@
 #include "ppm.hpp"
 #include "pyramid.hpp"
 
-__global__ void _r              (pixelByte *I, pixelByte *O, pixelByte g, float sigma, float alpha, unsigned width, unsigned height){
-  // f function is taken polinomial(at least a power function)
+__global__ void _llf(pixelByte *I, pixelByte *O, unsigned width, unsigned height, int fact, float ref, float sigma){
   int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
 
-  double out;
+  O[x] = fact*(I[x] - ref) * expf(
+                                - (I[x]-ref) * (I[x]-ref) / (2 * sigma * sigma)
+                              );
 
-  // Map to [0,1]
-  double iD = (double) I[x] / 255;
-  double gD = (double) g / 255;
-
-  double diffAbs = iD - gD;
-  int sign = 1;
-  if(diffAbs < 0){
-    sign = -1;
-    diffAbs = -diffAbs;
-  }
-
-  if(diffAbs < sigma){
-    out = gD + sign*sigma*powf( diffAbs / sigma, alpha); // r_d
-  }else{
-    out = gD + sign*(
-                      powf( (diffAbs - sigma), alpha) + sigma
-                    ) ; // r_e
-  }
-
-  // Remap to [0,255]
-  int i = out * 255;
-
-  if(i > 255){
-    O[x] = 255;
-  }else if(i < 0){
-    O[x] = 0;
-  }else{
-    O[x] = i;
-  }
 }
+__global__ void _llf_general(pixelByte *I, pixelByte *O, unsigned width, unsigned height, unsigned ref){
+  int index = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
+
+  pixelByte x = I[index] - ref;
+  O[index] = 3 * x * (fabsf(x) < 0.1)
+           + (x + 0.2) * (x > 0.1)
+           + (x - 0.2) * (x < -0.1);
+}
+__global__ void updateOutputLaplacianGeneral(pixelByte *tempLaplace, pixelByte *outLaplace, pixelByte *gaussian, unsigned width, unsigned height, float ref, float discretisation_step){
+  int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
+
+  outLaplace[x] = (fabsf(gaussian[x] - ref) < discretisation_step) *
+                   tempLaplace[x] *
+                   (1 - fabsf(gaussian[x] - ref) / discretisation_step);
+
+}
+__global__ void updateOutputLaplacian(pixelByte *tempLaplace, pixelByte *outLaplace, pixelByte *gaussian, unsigned width, unsigned height, float ref, float discretisation_step){
+  int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
+
+
+  outLaplace[x] += (fabsf(gaussian[x] - ref) < discretisation_step) *
+                   tempLaplace[x] *
+                   (1 - fabsf(gaussian[x] - ref) / discretisation_step);
+
+}
+__global__ void getRatio(pixelByte *grayI, pixelByte *colorI, pixelByte *O){
+  O[blockIdx.x] = colorI[blockIdx.x] / grayI[blockIdx.x];
+}
+__global__ void setRatio(pixelByte *grayInput, pixelByte *colorRatio){
+  grayInput[blockIdx.x] *= colorRatio[blockIdx.x];
+}
+
 __global__ void _upSample2      (pixelByte *in, pixelByte *out, int width, int height){
   int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
 
@@ -68,106 +72,70 @@ __global__ void _setLaplacian   (pixelByte *inPic, pixelByte *laplacian, unsigne
   /*
    * Set laplacian to recover the deleted data for Gaussian filter, not reduced size.
    */
-
   int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
 
-  int i;
-  i = inPic[x] + laplacian[x] - 128;
-  if(i < 0){
-   inPic[x] = 0;
-  }else if(i > 255){
-   inPic[x] = 255;
-  }else{
-   inPic[x] = i;
-  }
-
-}
-__global__ void _getNeighborhood(pixelByte *motherPic, pixelByte *outPic, unsigned edgeLen, unsigned width, unsigned height, unsigned x, unsigned y){
-  int i = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
-
-  int gercek = (i/edgeLen)*width + i%edgeLen + (x - (edgeLen/2 - 1)) + (y - (edgeLen/2 - 1))*width;
-
-  if(gercek/width != (gercek+edgeLen-i%edgeLen)/width){
-    outPic[i] = 0;
-    return;
-  }
-  if(gercek < 0 || gercek > width*height - 1){
-    outPic[i] = 0;
-    return;
-  }
-
-  outPic[i] = motherPic[gercek];
-
+  inPic[x] = inPic[x] - laplacian[x];
 }
 
-void localLaplacianPyramid(char *inputPath,
-                           char *outputPath,
-                           const float sigma,
-                           const float alpha,
-                           const int pyramidHeight,
-                           const int number_of_additions){
-
-
+void localLaplacianPyramidLLF_GENERAL(char *inputPath,
+                                      char *outputPath,
+                                      const int pyramidHeight,
+                                      const int N
+                                     ){
+  // MATLAB llf function
   Picture inPic(inputPath, true);
 
+  const float discretisation_step =  1.0 /  (N-1); // linespace tanimi boyle cunku
 
-  Pyramid *gaussianP = new Pyramid();
-  Pyramid *laplacianP = new Pyramid();
-  Pyramid *outputP = new Pyramid();
+  Pyramid gaussianGrayScale; // to process
+  Pyramid outputP;;
+  Picture inPicGray = Picture(&inPic);
+  inPicGray.toGrayScale();
+  Picture ratioPic  = Picture(inPic.width, inPic.height, true);
 
-  gaussianP->createGaussian(&inPic, pyramidHeight); // COOOK GARIIP!!!! biz buna veri yolluyoruz ama yolladigimiz objenin destructor fonksiyonu bu fonksiyon bittiginde de cagiriliyor!!!!
-  laplacianP->createLaplacian(&inPic, pyramidHeight);
+  unsigned numberOfPixels = inPic.width * inPic.height;
+  // Get ratio
+  getRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(inPicGray.R, inPic.R, ratioPic.R);
+  getRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(inPicGray.G, inPic.G, ratioPic.G);
+  getRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(inPicGray.B, inPic.B, ratioPic.B);
 
-  outputP->createLaplacian(&inPic, pyramidHeight);
+  gaussianGrayScale.createGaussian(&inPicGray, pyramidHeight);
+  outputP.createLaplacian(&inPicGray, pyramidHeight);
 
-  for(int l = 0; l<pyramidHeight; l++){
+  Picture mapped(inPic.width, inPic.height, true);
 
-    unsigned width  = inPic.width / std::pow(2, l);
-    unsigned height = inPic.height/ std::pow(2, l);
+  for(float ref = 0; ref<=1; ref+=discretisation_step){
+    // Map to a new image
+    dim3 dimBlock2(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 dimGrid2 (inPic.width/BLOCK_SIZE, inPic.height/BLOCK_SIZE);
 
-    unsigned edgeLen = (unsigned) std::pow(2, l);
-    unsigned padding    = (unsigned) std::pow(2, l) * 2; // bunun sayesinde civarindaki Gaussian'lari hesaplayabilecegiz ( (kernelSize - 1) / 2)
+    // Converting the base image to a new mapped image
+    _llf_general<<<dimGrid2, dimBlock2>>>(inPicGray.R, mapped.R, inPic.width, inPic.height, ref);
+    // _llf_general<<<dimGrid2, dimBlock2>>>(inPicGray.G, mapped.G, inPic.width, inPic.height, ref);
+    // _llf_general<<<dimGrid2, dimBlock2>>>(inPicGray.B, mapped.B, inPic.width, inPic.height, ref);
 
-    edgeLen += 2*padding; // 2 taraftam
+    // Find new Laplacian Pyramid from the mapped image
+    Pyramid tempLaplacian;
+    tempLaplacian.createLaplacian(&mapped, pyramidHeight);
 
-    for(int y = 0; y<height; y++){
-      for(int x = 0; x<width; x++){
-        // Get Gaussian average for each layer
-        Pixel g = gaussianP->getLayer(l)->getPixel(x, y);
+    // Do for all layers
+    for(int l = 0; l<pyramidHeight; l++){
+      unsigned width  = inPic.width /std::pow(2, l);
+      unsigned height = inPic.height/std::pow(2, l);
 
-        // Determine the area
-        dim3 dimBlockEdge(BLOCK_SIZE, BLOCK_SIZE);
-        dim3 dimGridEdge (edgeLen/BLOCK_SIZE, edgeLen/BLOCK_SIZE);
-        Picture area(edgeLen, edgeLen, true);
-        _getNeighborhood<<<dimGridEdge, dimBlockEdge>>>(inPic.R, area.R, edgeLen, inPic.width, inPic.height, x, y);
-        _getNeighborhood<<<dimGridEdge, dimBlockEdge>>>(inPic.G, area.G, edgeLen, inPic.width, inPic.height, x, y);
-        _getNeighborhood<<<dimGridEdge, dimBlockEdge>>>(inPic.B, area.B, edgeLen, inPic.width, inPic.height, x, y);
+      dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
+      dim3 dimGrid (width/BLOCK_SIZE, height/BLOCK_SIZE);
 
-        // Map to a new image
-        dim3 dimBlock2(BLOCK_SIZE, BLOCK_SIZE);
-        dim3 dimGrid2 (inPic.width/BLOCK_SIZE, inPic.height/BLOCK_SIZE);
-        Picture mapped(edgeLen, edgeLen, true);
-
-        // Converting the base image to a new mapped image
-        _r<<<dimGrid2, dimBlock2>>>(area.R, mapped.R, g.R, sigma, alpha, edgeLen, edgeLen);
-        _r<<<dimGrid2, dimBlock2>>>(area.G, mapped.G, g.G, sigma, alpha, edgeLen, edgeLen);
-        _r<<<dimGrid2, dimBlock2>>>(area.B, mapped.B, g.B, sigma, alpha, edgeLen, edgeLen);
-
-        // Find new Laplacian Pyramid for the mapped image
-        Pyramid nLaplacianP;
-        nLaplacianP.createLaplacian(&mapped, l+1);
-
-        // Update output pyramid
-        Pixel p = nLaplacianP.getLayer(l)->getPixel(edgeLen/2 - 1, edgeLen/2 - 1);
-        outputP->getLayer(l)->setPixel(x, y, p);
-      }
+      updateOutputLaplacianGeneral<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->R, outputP.getLayer(l)->R, gaussianGrayScale.getLayer(l)->R, width, height, ref, discretisation_step);
+      // updateOutputLaplacianGeneral<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->G, outputP.getLayer(l)->G, gaussianGrayScale.getLayer(l)->G, width, height, ref, discretisation_step);
+      // updateOutputLaplacianGeneral<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->B, outputP.getLayer(l)->B, gaussianGrayScale.getLayer(l)->B, width, height, ref, discretisation_step);
     }
   }
 
   // Collapse the pyramid
   for(int i = pyramidHeight-1; i > 0; i--){
-    unsigned width  = gaussianP->getLayer(i-1)->width;
-    unsigned height = gaussianP->getLayer(i-1)->height;
+    unsigned width  = gaussianGrayScale.getLayer(i-1)->width;
+    unsigned height = gaussianGrayScale.getLayer(i-1)->height;
 
     dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
     dim3 dimGrid (width/2/BLOCK_SIZE, height/2/BLOCK_SIZE);
@@ -175,16 +143,107 @@ void localLaplacianPyramid(char *inputPath,
     dim3 dimBlock2(BLOCK_SIZE, BLOCK_SIZE);
     dim3 dimGrid2 (width/BLOCK_SIZE, height/BLOCK_SIZE);
 
-    _upSample2<<<dimGrid, dimBlock>>>(gaussianP->getLayer(i)->R, gaussianP->getLayer(i-1)->R, width/2, height/2);
-    _upSample2<<<dimGrid, dimBlock>>>(gaussianP->getLayer(i)->G, gaussianP->getLayer(i-1)->G, width/2, height/2);
-    _upSample2<<<dimGrid, dimBlock>>>(gaussianP->getLayer(i)->B, gaussianP->getLayer(i-1)->B, width/2, height/2);
+    _upSample2<<<dimGrid, dimBlock>>>(gaussianGrayScale.getLayer(i)->R, gaussianGrayScale.getLayer(i-1)->R, width/2, height/2);
+    // _upSample2<<<dimGrid, dimBlock>>>(gaussianGrayScale.getLayer(i)->G, gaussianGrayScale.getLayer(i-1)->G, width/2, height/2);
+    // _upSample2<<<dimGrid, dimBlock>>>(gaussianGrayScale.getLayer(i)->B, gaussianGrayScale.getLayer(i-1)->B, width/2, height/2);
 
-    for(int z = 0; z<number_of_additions; z++){
-      _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianP->getLayer(i-1)->R, outputP->getLayer(i-1)->R, width, height);
-      _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianP->getLayer(i-1)->G, outputP->getLayer(i-1)->G, width, height);
-      _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianP->getLayer(i-1)->B, outputP->getLayer(i-1)->B, width, height);
-    }
+
+    _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->R, outputP.getLayer(i-1)->R, width, height);
+    // _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->G, outputP.getLayer(i-1)->G, width, height);
+    // _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->B, outputP.getLayer(i-1)->B, width, height);
   }
-  gaussianP->getLayer(0)->write(outputPath);
 
+  // Set ratio
+  setRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(ratioPic.R, gaussianGrayScale.getLayer(0)->R);
+  setRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(ratioPic.G, gaussianGrayScale.getLayer(0)->R);
+  setRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(ratioPic.B, gaussianGrayScale.getLayer(0)->R);
+
+  ratioPic.write(outputPath);
+}
+void localLaplacianPyramid(char *inputPath,
+                           char *outputPath,
+                           const float sigma,
+                           const int pyramidHeight,
+                           const int fact,
+                           const int N
+                           ){
+  // MATLAB llf function
+  Picture inPic(inputPath, true);
+
+  const float discretisation_step =  1.0 /  (N-1); // linespace tanimi boyle cunku
+
+  Pyramid gaussianGrayScale; // to process
+  Pyramid outputP;;
+  Picture inPicGray = Picture(&inPic);
+  inPicGray.toGrayScale();
+  Picture ratioPic  = Picture(inPic.width, inPic.height, true);
+
+  unsigned numberOfPixels = inPic.width * inPic.height;
+  // Get ratio
+  getRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(inPicGray.R, inPic.R, ratioPic.R);
+  getRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(inPicGray.G, inPic.G, ratioPic.G);
+  getRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(inPicGray.B, inPic.B, ratioPic.B);
+
+
+
+  gaussianGrayScale.createGaussian(&inPicGray, pyramidHeight);
+  outputP.createLaplacian(&inPicGray, pyramidHeight);
+
+  Picture mapped(inPic.width, inPic.height, true);
+
+  for(float ref = 0; ref<=1; ref+=discretisation_step){
+    // Map to a new image
+    dim3 dimBlock2(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 dimGrid2 (inPic.width/BLOCK_SIZE, inPic.height/BLOCK_SIZE);
+
+    // Converting the base image to a new mapped image
+    _llf<<<dimGrid2, dimBlock2>>>(inPicGray.R, mapped.R, inPic.width, inPic.height, fact, ref, sigma);
+    // _llf<<<dimGrid2, dimBlock2>>>(inPicGray.G, mapped.G, inPic.width, inPic.height, fact, ref, sigma);
+    // _llf<<<dimGrid2, dimBlock2>>>(inPicGray.B, mapped.B, inPic.width, inPic.height, fact, ref, sigma);
+
+    // Find new Laplacian Pyramid from the mapped image
+    Pyramid tempLaplacian;
+    tempLaplacian.createLaplacian(&mapped, pyramidHeight);
+
+    // Do for all layers
+    for(int l = 0; l<pyramidHeight; l++){
+      unsigned width  = inPic.width /std::pow(2, l);
+      unsigned height = inPic.height/std::pow(2, l);
+
+      dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
+      dim3 dimGrid (width/BLOCK_SIZE, height/BLOCK_SIZE);
+
+      updateOutputLaplacian<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->R, outputP.getLayer(l)->R, gaussianGrayScale.getLayer(l)->R, width, height, ref, discretisation_step);
+      // updateOutputLaplacian<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->G, outputP.getLayer(l)->G, gaussianGrayScale.getLayer(l)->G, width, height, ref, discretisation_step);
+      // updateOutputLaplacian<<<dimGrid, dimBlock>>>(tempLaplacian.getLayer(l)->B, outputP.getLayer(l)->B, gaussianGrayScale.getLayer(l)->B, width, height, ref, discretisation_step);
+    }
+
+  }
+
+  // Collapse the pyramid
+  for(int i = pyramidHeight-1; i > 0; i--){
+    unsigned width  = gaussianGrayScale.getLayer(i-1)->width;
+    unsigned height = gaussianGrayScale.getLayer(i-1)->height;
+
+    dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 dimGrid (width/2/BLOCK_SIZE, height/2/BLOCK_SIZE);
+
+    dim3 dimBlock2(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 dimGrid2 (width/BLOCK_SIZE, height/BLOCK_SIZE);
+
+    _upSample2<<<dimGrid, dimBlock>>>(gaussianGrayScale.getLayer(i)->R, gaussianGrayScale.getLayer(i-1)->R, width/2, height/2);
+    // _upSample2<<<dimGrid, dimBlock>>>(gaussianGrayScale.getLayer(i)->G, gaussianGrayScale.getLayer(i-1)->G, width/2, height/2);
+    // _upSample2<<<dimGrid, dimBlock>>>(gaussianGrayScale.getLayer(i)->B, gaussianGrayScale.getLayer(i-1)->B, width/2, height/2);
+
+    _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->R, outputP.getLayer(i-1)->R, width, height);
+    // _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->G, outputP.getLayer(i-1)->G, width, height);
+    // _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->B, outputP.getLayer(i-1)->B, width, height);
+  }
+
+  // Set ratio
+  setRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(ratioPic.R, gaussianGrayScale.getLayer(0)->R);
+  setRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(ratioPic.G, gaussianGrayScale.getLayer(0)->R);
+  setRatio<<<numberOfPixels/BLOCK_SIZE, BLOCK_SIZE>>>(ratioPic.B, gaussianGrayScale.getLayer(0)->R);
+
+  ratioPic.write(outputPath);
 }

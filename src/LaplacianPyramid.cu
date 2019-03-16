@@ -4,7 +4,7 @@
 
 
 
-__global__ void conv2       (pixelByte *in      , pixelByte *out, int width, int height, int kernelSize, float kernel[]){
+__global__ void conv2(pixelByte *in      , pixelByte *out, int width, int height, int kernelSize, float kernel[]){
   /*
    * Birakirken Octave ile kontrol ettim calisiyordu.
    */
@@ -47,7 +47,7 @@ __global__ void conv2       (pixelByte *in      , pixelByte *out, int width, int
   out[x] = (unsigned) cikti;
 
 }
-__global__ void reduce      (pixelByte *in      , pixelByte *out, int width, int height){
+__global__ void reduce(pixelByte *in      , pixelByte *out, int width, int height){
   /*
    * Convolve with Gaussian kernel.
    * Normalde convoluyion resim boyutunu buyutuyor ama biz burada buyutmuyormus gibi yapalim, kenarlari atalim, kolaylik olmasi acisindan.
@@ -83,7 +83,7 @@ __global__ void reduce      (pixelByte *in      , pixelByte *out, int width, int
   out[x] = (unsigned) cikti;
 
 }
-__global__ void downSample2 (pixelByte *in      , pixelByte *out, int width, int height){
+__global__ void downSample2(pixelByte *in      , pixelByte *out, int width, int height){
   int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
 
   if(x/width%2 == 1 || x%2 == 1){
@@ -92,7 +92,7 @@ __global__ void downSample2 (pixelByte *in      , pixelByte *out, int width, int
 
   out[(x/width/2)*width/2 + (x%width)/2] = in[x];
 }
-__global__ void upSample2   (pixelByte *in      , pixelByte *out, int width, int height){
+__global__ void upSample2(pixelByte *in      , pixelByte *out, int width, int height){
   int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
 
   if(x > width*height-1){
@@ -104,7 +104,7 @@ __global__ void upSample2   (pixelByte *in      , pixelByte *out, int width, int
   out[(x%width)*2 + x/width*(width*4)+width*2]   = in[x]; // 1 alti 1 sagi
   out[(x%width)*2 + x/width*(width*4)+1+width*2] = in[x]; // 1 sagi 1 alti
 }
-__global__ void downSample  (pixelByte *in      , pixelByte *out, int width, int height){
+__global__ void downSample(pixelByte *in      , pixelByte *out, int width, int height){
   /*
    * Denedim bu da calisiyordu.
    * Cift olan satirlari siliyoruz.
@@ -116,7 +116,7 @@ __global__ void downSample  (pixelByte *in      , pixelByte *out, int width, int
      out[x/width/2*width+x%width] = in[x];
    }
 }
-__global__ void upSample    (pixelByte *in      , pixelByte *out, int width, int height){
+__global__ void upSample(pixelByte *in      , pixelByte *out, int width, int height){
   /*
    * Bunu da denedim calisiyor.
    * Satiri kopyaliyoruz, tek satirlari da 0 ile dolduruyoruz.(ilk satiri kopyala 1, satiri doldur)
@@ -173,8 +173,7 @@ __global__ void setLaplacian(pixelByte *image   , pixelByte *laplacian, int widt
    image[x] = i;
   }
 }
-__global__ void _blend      (pixelByte *ch1     , pixelByte *ch2, pixelByte *composite, unsigned width, unsigned height)
-{
+__global__ void _blend(pixelByte *ch1     , pixelByte *ch2, pixelByte *composite, unsigned width, unsigned height){
   int i = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
 
   if(i < height*width/2-blendLength*width/2+1){
@@ -407,8 +406,8 @@ void blendElmaPortakal(char *pic1, char *pic2, char *picOut, const unsigned pyra
   */
   Picture elma[pyramidHeight];
   Picture portakal[pyramidHeight];
-  elma[0]               = Picture(pic1, true);
-  portakal[0]           = Picture(pic2, true);
+  elma[0]     = Picture(pic1, true);
+  portakal[0] = Picture(pic2, true);
 
 
   for(int i = 1; i<pyramidHeight; i++){
@@ -431,7 +430,7 @@ void gaussianBenchmark(int block_size){
   char inFile[]  = "data/adrian/current.ppm";
   char outFile[] = "output/adrianCurrent.ppm";
   Picture pic1 = Picture(inFile, true);
-  printf("%d, ", pic1.width);
+
   Picture pic2 = Picture(pic1.width, pic1.height, true);
 
   dim3 dimBlock2(block_size, block_size);
@@ -448,7 +447,7 @@ void gaussianBenchmarkCPU(){
   char inFile[]  = "data/adrian/current.ppm";
   char outFile[] = "output/adrianCurrent.ppm";
   Picture pic1 = Picture(inFile, false);
-  printf("%d, ", pic1.width);
+
   Picture pic2 = Picture(pic1.width, pic1.height, false);
 
   dim3 dimBlock2(BLOCK_SIZE, BLOCK_SIZE);
