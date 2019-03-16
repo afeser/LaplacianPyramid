@@ -5,10 +5,13 @@ The library includes GPU implementation of filters and laplacian pyramids. Also 
 
 
 ## Files
-LaplacianPyramid.cu -> Some functions on images, creating Gaussian and Gaplacian images, openCV example of blend image, sharpen etc.
-LocalLaplacianPyramid.cu -> Local Laplacian Pyramid CUDA implementation
-main.cu -> A simple interface to use the above
-eskiKodlar -> Tried, but not used, like recyle bin
+  - <b>LaplacianPyramid.cu</b> contains some functions on images, creating Gaussian and Gaplacian images, openCV example of blend image, sharpen etc.
+
+  - <b>LocalLaplacianPyramid.cu</b> contains Local Laplacian Pyramid CUDA implementation
+
+  - <b>main.cu</b> is a simple interface to use the above
+
+  - <b>eskiKodlar</b> is a folder including tried, but not used codes, it is like a recyle bin
 
 ## Some important notes
 
