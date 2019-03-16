@@ -28,6 +28,7 @@ __global__ void updateOutputLaplacianGeneral(pixelByte *tempLaplace, pixelByte *
 __global__ void updateOutputLaplacian(pixelByte *tempLaplace, pixelByte *outLaplace, pixelByte *gaussian, unsigned width, unsigned height, float ref, float discretisation_step){
   int x = blockIdx.y*BLOCK_SIZE*width + blockIdx.x*BLOCK_SIZE + threadIdx.y*width + threadIdx.x; //current pixel
 
+
   outLaplace[x] += (fabsf(gaussian[x] - ref) < discretisation_step) *
                    tempLaplace[x] *
                    (1 - fabsf(gaussian[x] - ref) / discretisation_step);
@@ -145,6 +146,7 @@ void localLaplacianPyramidLLF_GENERAL(char *inputPath,
     _upSample2<<<dimGrid, dimBlock>>>(gaussianGrayScale.getLayer(i)->R, gaussianGrayScale.getLayer(i-1)->R, width/2, height/2);
     // _upSample2<<<dimGrid, dimBlock>>>(gaussianGrayScale.getLayer(i)->G, gaussianGrayScale.getLayer(i-1)->G, width/2, height/2);
     // _upSample2<<<dimGrid, dimBlock>>>(gaussianGrayScale.getLayer(i)->B, gaussianGrayScale.getLayer(i-1)->B, width/2, height/2);
+
 
     _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->R, outputP.getLayer(i-1)->R, width, height);
     // _setLaplacian<<<dimGrid2, dimBlock2>>>(gaussianGrayScale.getLayer(i-1)->G, outputP.getLayer(i-1)->G, width, height);
